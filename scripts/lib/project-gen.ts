@@ -39,7 +39,7 @@ interface Item {
   idBase?: string;
   group: ProjectGroup;
   name: string;
-  detail: string | null;
+  detail: string;
   screenId?: string;
   a: El | null;
   b: El | null;
@@ -51,8 +51,8 @@ export interface ExpectedItem {
   key: string;
   group: ProjectGroup;
   name: string;
-  /** null when the contract leaves it open or it depends on the side. */
-  detail: string | null;
+  /** From A when present, else B. */
+  detail: string;
   screenId: string | null;
   status: ItemStatus;
   views: ('code' | 'changes' | 'xml')[];
@@ -95,6 +95,10 @@ const pageSource = (aspx: string[]): string => deflateRawSync(Buffer.from(aspx.j
 function render(el: El): string[] {
   const list: [string, string][] = el.aspx ? [...el.attrs, ['pageSource', pageSource(el.aspx)]] : el.attrs;
   if (el.parts.length === 0) return [`<${el.tag}${attrs(list)} />`];
+  const bare = el.parts[0];
+  if (el.parts.length === 1 && bare?.kind === 'bare') {
+    return `<${el.tag}${attrs(list)}><![CDATA[${bare.body.map(encCdata).join(EOL)}]]></${el.tag}>`.split(EOL);
+  }
   const out = [`<${el.tag}${attrs(list)}>`];
   for (const p of el.parts) {
     if (p.kind === 'lines') out.push(...p.lines);
@@ -112,11 +116,6 @@ function render(el: El): string[] {
 
 const clone = (el: El): El => JSON.parse(JSON.stringify(el)) as El;
 const getAttr = (list: [string, string][], k: string): string => list.find(([n]) => n === k)?.[1] ?? '';
-const setAttr = (el: El, k: string, v: string): void => {
-  const a = el.attrs.find(([n]) => n === k);
-  if (a) a[1] = v;
-  else el.attrs.push([k, v]);
-};
 type CdataPart = Extract<Part, { kind: 'cdata' }>;
 const cdatas = (el: El): CdataPart[] => el.parts.filter((p): p is CdataPart => p.kind === 'cdata');
 
@@ -291,9 +290,8 @@ function buildItems(rng: Rng): Item[] {
     const parts: Part[] = Array.from({ length: rng.int(2, 7) }, (_, k): Part => {
       const f = `Usr${rng.pick(WORDS)}${k}`;
       const typeName = rng.pick(['string', 'decimal?', 'int?', 'bool?']);
-      const storage = rng.chance(0.75) ? 'DBTableColumn' : 'NonDB';
-      const body = k === 1 && i === 2 ? null : [`[PXDB${typeName === 'string' ? 'String(30, IsUnicode = true)' : 'Decimal(4)'}]`, `[PXUIField(DisplayName = "${f.slice(3)}", Visibility = PXUIVisibility.SelectorVisible)]`];
-      return { kind: 'field', attrs: [['FieldName', f], ['TypeName', typeName], ['StorageName', storage]], body };
+      const body = [`[PXDB${typeName === 'string' ? 'String(256)' : 'Decimal(4)'}]`, `[PXUIField(DisplayName="${f.slice(3)}")]`];
+      return { kind: 'field', attrs: [['FieldName', f], ['TypeName', typeName], ['MapDbTable', dac], ['TextAttributes', '#CDATA'], ['StorageName', 'AddColumn']], body };
     });
     add({ key: type, group: 'code', name: dac, detail: `DAC customization · ${parts.length} fields`, a: { tag: 'DAC', attrs: [['type', type]], parts } });
   }
@@ -315,25 +313,31 @@ function buildItems(rng: Rng): Item[] {
   // Content-less file references, as in real exports (the files live in the zip).
   for (const path of [`Pages\\SO\\${RELATED_SCREEN}.aspx`, `Pages\\SO\\${RELATED_SCREEN}.aspx.cs`, 'Pages\\PO\\PO302000.aspx', 'Bin\\Contoso.Extensions.dll']) {
     const screenId = /Pages\\\w\w\\(\w\w\d{6})\.aspx/.exec(path)?.[1];
-    add({ key: path, group: path.endsWith('.cs') ? 'code' : 'files', name: path.split('\\').pop() ?? path, detail: path, ...(screenId ? { screenId } : {}), a: { tag: 'File', attrs: [['AppRelativePath', path], ['FileSize', String(rng.int(2000, 90000))]], parts: [] } });
+    add({ key: path, group: path.endsWith('.cs') ? 'code' : 'files', name: path.split('\\').pop() ?? path, detail: path, ...(screenId ? { screenId } : {}), a: { tag: 'File', attrs: [['AppRelativePath', path]], parts: [] } });
   }
   // Modern UI per-tenant files.
   for (const [screen, file] of [[RELATED_SCREEN, 'SO301000.ts'], [RELATED_SCREEN, 'SO301000.html'], ['PO302000', 'PO302000.ts']] as const) {
-    const path = `FrontendSources\\screen\\src\\development\\screens\\${screen.slice(0, 2)}\\${screen}\\extensions\\${file}`;
-    add({ key: path, group: 'files', name: file, detail: `Modern UI file · ${path}`, screenId: screen, a: { tag: 'PerTenantFile', attrs: [['AppRelativePath', path], ['ScreenId', screen], ['LastModified', '2026-09-30T11:02:41']], parts: [] } });
+    const path = `screens\\${screen.slice(0, 2)}\\${screen}\\${file}`;
+    add({ key: path, group: 'files', name: file, detail: `Modern UI file · ${path}`, screenId: screen, a: { tag: 'PerTenantFile', attrs: [['AppRelativePath', path], ['ScreenId', screen]], parts: [] } });
   }
   // Pages (screens): pageSource = base64(raw deflate(ASPX)). Every 4th carries a control delta.
   for (let i = 0; i < 22; i++) {
     const mod = i === 0 ? 'so' : rng.pick(MODS);
     const screen = i === 0 ? RELATED_SCREEN : `${mod.toUpperCase()}${i === 1 ? 302001 : rng.int(100000, 509999)}`;
-    const path = `~/pages/${mod}/${screen.toLowerCase()}.aspx`;
+    const path = `~/Pages/${mod.toUpperCase()}/${screen}.aspx`;
     // Page 4 is big, so its pageSource line is tens of thousands of characters, as in real exports.
     const aspx = aspxPage(rng, screen, i === 4 ? 1400 : rng.int(4, 40));
-    const delta = i % 4 === 0 ? [`    <PXFormView ID="form"><Children Key="Template"><PXTextEdit ID="edUsr${rng.pick(WORDS)}" DataField="Usr${rng.pick(WORDS)}" /></Children></PXFormView>`] : [];
+    const delta = i % 4 === 0 ? [`    <PXFormView ID="form"><Children Key="Template"><PXNumberEdit ID="edUsr${rng.pick(WORDS)}" DataField="Usr${rng.pick(WORDS)}" /></Children></PXFormView>`] : [];
     add({
       key: path, group: 'screens', name: screen, detail: delta.length ? 'Screen customization' : 'Page', screenId: screen,
       a: { tag: 'Page', attrs: [['path', path]], parts: delta.length ? [{ kind: 'lines', lines: delta }] : [], aspx },
     });
+  }
+  // A Modern UI only page: deflated HTML.
+  {
+    const html = ['<template>', '    <qp-template id="form-Document" name="17-17-14">', ...Array.from({ length: 12 }, (_, k) => `        <field name="Usr${rng.pick(WORDS)}${k}"></field>`), '    </qp-template>', '</template>'];
+    const path = '~/Scripts/Screens/PO302000.html';
+    add({ key: path, group: 'screens', name: 'PO302000', detail: 'Modern UI page', screenId: 'PO302000', a: { tag: 'Page', attrs: [['path', path], ['isModernUIOnlyNode', 'True']], parts: [], aspx: html } });
   }
   // Modern UI editor metadata: bare CDATA with JSON.
   for (const screen of [RELATED_SCREEN, 'PO302000', 'AR303000']) {
@@ -356,7 +360,7 @@ function buildItems(rng: Rng): Item[] {
   // Reports (CDATA XML).
   for (let i = 0; i < 4; i++) {
     const r = `SO64${1000 + i * 10}.rpx`;
-    add({ key: r, group: 'reports', name: r, detail: null, a: { tag: 'Report', attrs: [['ReportName', r]], parts: [{ kind: 'cdata', name: 'Xml', body: reportBody(rng, r, rng.int(10, 40)) }] } });
+    add({ key: r, group: 'reports', name: r, detail: '', a: { tag: 'Report', attrs: [['ReportName', r]], parts: [{ kind: 'cdata', name: 'Xml', body: reportBody(rng, r, rng.int(10, 40)) }] } });
   }
   // Site map nodes: identity = first <row> with ScreenID; detail = its Title (entities decoded).
   for (let i = 0; i < 7; i++) {
@@ -380,16 +384,17 @@ function buildItems(rng: Rng): Item[] {
       '    </row>',
       '</GIDesign>',
     ];
-    add({ key: name, group: 'inquiries', name, detail: null, a: { tag: 'GenericInquiryScreen', attrs: [], parts: [{ kind: 'lines', lines: dataSet('GIDesign', rows) }] } });
+    add({ key: name, group: 'inquiries', name, detail: '', a: { tag: 'GenericInquiryScreen', attrs: [], parts: [{ kind: 'lines', lines: dataSet('GIDesign', rows) }] } });
   }
   // Endpoints: the same name in two versions, plus another one.
   for (const [nm, ver] of [['ContosoEndpoint', '23.200.001'], ['ContosoEndpoint', '24.200.001'], ['ContosoMobile', '24.200.001']] as const) {
+    // The 24.200.001 ContosoEndpoint is made B-only below.
     const lines = [
       `    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="${nm}" version="${ver}" systemContractVersion="4">`,
       ...Array.from({ length: rng.int(4, 12) }, (_, k) => `        <TopLevelEntity name="${rng.pick(WORDS)}${k}" screen="${rng.pick(MODS).toUpperCase()}${rng.int(100000, 509999)}" />`),
       '    </Endpoint>',
     ];
-    add({ key: nm, idBase: `EntityEndpoint:${nm}@${ver}`, group: 'integration', name: nm, detail: null, a: { tag: 'EntityEndpoint', attrs: [['Name', nm], ['Version', ver]], parts: [{ kind: 'lines', lines }] } });
+    add({ key: nm, idBase: `EntityEndpoint:${nm}@${ver}`, group: 'integration', name: nm, detail: `Version ${ver}`, a: { tag: 'EntityEndpoint', attrs: [['Name', nm], ['Version', ver]], parts: [{ kind: 'lines', lines }] } });
   }
   // Unknown elements: land in "other" with detail = element name.
   for (let i = 0; i < 2; i++) {
@@ -442,6 +447,12 @@ function buildPair(): ProjectPair {
     edits.modified?.push(it.key);
   };
 
+  // One endpoint name in a second version, only in B (distinct item, no merge).
+  {
+    const it = pick(by('EntityEndpoint'), 1);
+    it.a = null;
+    edits.onlyB?.push(`${it.key}@24.200.001`);
+  }
   // Only in A.
   for (const it of [pick(graphs, 5), pick(pages, 3), pick(tables, 4), pick(csFiles, 2), pick(by('SiteMapNode'), 1), pick(by('MobileSiteMapNode'), 1), pick(by('PerTenantFile'), 2)]) {
     it.b = null;
@@ -459,7 +470,7 @@ function buildPair(): ProjectPair {
     const f = el.parts.find((p): p is Extract<Part, { kind: 'field' }> => p.kind === 'field' && p.body !== null);
     if (f?.body) f.body[0] = (f.body[0] ?? '').replace(/\((\d+)/, (_, n: string) => `(${Number(n) + 10}`);
   });
-  mod(pick(by('DAC'), 1), (el) => el.parts.push({ kind: 'field', attrs: [['FieldName', 'UsrAddedInB'], ['TypeName', 'bool?'], ['StorageName', 'DBTableColumn']], body: ['[PXDBBool]', '[PXUIField(DisplayName = "Added In B")]'] }));
+  mod(pick(by('DAC'), 1), (el) => el.parts.push({ kind: 'field', attrs: [['FieldName', 'UsrAddedInB'], ['TypeName', 'bool?'], ['MapDbTable', 'SOOrder'], ['TextAttributes', '#CDATA'], ['StorageName', 'AddColumn']], body: ['[PXDBBool]', '[PXUIField(DisplayName="Added In B")]'] }));
   mod(pick(by('EditorUpdatedFields'), 0), (el) => {
     const p = el.parts[0];
     if (p?.kind === 'bare') p.body = [(p.body[0] ?? '').replace('"visible":true', '"visible":"maybe"')];
@@ -489,7 +500,7 @@ function buildPair(): ProjectPair {
       p.lines.splice(at, 0, '                        <row LineNbr="99" ObjectName="SOOrder" Field="orderTotal" IsVisible="True" />');
     }
   });
-  mod(pick(by('EntityEndpoint'), 1), (el) => {
+  mod(pick(by('EntityEndpoint'), 0), (el) => {
     const p = el.parts[0];
     if (p?.kind === 'lines') p.lines.splice(1, 1);
   });
@@ -497,8 +508,6 @@ function buildPair(): ProjectPair {
     const c = cdatas(el)[0];
     if (c) c.body[2] = (c.body[2] ?? '').replace('value="true"', 'value="false"');
   });
-  // A content-less File: no CDATA, so the element itself is compared.
-  mod(pick(by('File').filter((it) => !it.a?.parts.length), 0), (el) => setAttr(el, 'FileSize', String(Number(getAttr(el.attrs, 'FileSize')) + 512)));
 
   // Whitespace-only.
   for (const i of [3, 4]) {
@@ -548,18 +557,20 @@ function buildPair(): ProjectPair {
   const orderB = items.filter((it) => it.b && !added.includes(it));
   const moveTable = pick(tables, 8);
   const moveGraph = pick(graphs, 20);
+  const movePage = pick(pages, 9);
   const move = (list: Item[], it: Item, to: number): void => {
     list.splice(list.indexOf(it), 1);
     list.splice(to, 0, it);
   };
   move(orderB, moveTable, orderB.length);
   move(orderB, moveGraph, 3);
-  edits.moved?.push(moveTable.key, moveGraph.key);
+  move(orderB, movePage, 20);
+  edits.moved?.push(moveTable.key, moveGraph.key, movePage.key);
   orderB.splice(40, 0, added[0] as Item);
   orderB.splice(orderB.length - 10, 0, ...added.slice(1));
 
-  const rootA: Record<string, string> = { level: '0', description: 'Contoso order management (customer copy)', 'product-version': '24.200.0001' };
-  const rootB: Record<string, string> = { ...rootA, 'product-version': '25.100.0119', description: 'Contoso order management (dev)' };
+  const rootA: Record<string, string> = { level: '99', description: '', 'product-version': '24.212' };
+  const rootB: Record<string, string> = { ...rootA, 'product-version': '25.201' };
 
   const ranges = new Map<Item, { a?: { startLine: number; endLine: number }; b?: { startLine: number; endLine: number } }>();
   const doc = (order: Item[], side: 'a' | 'b', root: Record<string, string>): string => {
@@ -587,14 +598,14 @@ function buildPair(): ProjectPair {
     const n = (seen.get(base) ?? 0) + 1;
     seen.set(base, n);
     const r = ranges.get(it) ?? {};
-    const sidesDisagree = it.a && it.b && (el.tag === 'DAC' || el.tag === 'Table') && it.a.parts.length !== it.b.parts.length;
     return {
       id: n === 1 ? base : `${base}#${n}`,
       element: el.tag,
       key: it.key,
       group: it.group,
       name: it.name,
-      detail: sidesDisagree ? null : it.detail,
+      // From A when present, else B (the item list is built from A first).
+      detail: it.detail,
       screenId: it.screenId ?? null,
       status: status(it.a, it.b),
       views: views(el),

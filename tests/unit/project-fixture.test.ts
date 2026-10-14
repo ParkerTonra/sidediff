@@ -58,7 +58,7 @@ describe('project fixture', () => {
     expect(sidecar.items.filter((i) => i.element === 'Page').every((i) => i.views[0] === 'code')).toBe(true);
     expect(sidecar.items.some((i) => i.element === 'Page' && i.views.includes('changes'))).toBe(true);
     // Real exports also carry content-less File references.
-    expect(p.a).toMatch(/<File AppRelativePath="[^"]+" FileSize="\d+" \/>/);
+    expect(p.a).toMatch(/^<File AppRelativePath="[^"]+" \/>\r$/m);
   });
 
   it('covers every status, duplicates and moves', () => {
@@ -92,7 +92,7 @@ describe('project fixture', () => {
         if (!r) continue;
         expect(lines[r.startLine - 1]?.startsWith(`<${it.element}`), it.id).toBe(true);
         const end = (lines[r.endLine - 1] ?? '').trimEnd();
-        expect(r.startLine === r.endLine ? end.endsWith(' />') : end === `</${it.element}>`, it.id).toBe(true);
+        expect(end.endsWith(`</${it.element}>`) || (r.startLine === r.endLine && end.endsWith(' />')), it.id).toBe(true);
       }
     }
   });
@@ -109,7 +109,11 @@ describe('project fixture', () => {
 
   it('is shaped like a real export: no <?xml> header, CRLF, entities, Name@Version endpoints', () => {
     for (const t of [p.a, p.b]) {
-      expect(t.startsWith('<Customization ')).toBe(true);
+      expect(t.startsWith('<Customization level="99" description="" product-version="')).toBe(true);
+      expect(t).toMatch(/^<EditorUpdatedFields ScreenId="\w+"><!\[CDATA\[\{.*\}\]\]><\/EditorUpdatedFields>\r$/m);
+      expect(t).toMatch(/^<Page path="~\/Pages\/[A-Z]{2}\/[A-Z]{2}\d{6}\.aspx" pageSource="[A-Za-z0-9+/=]+" \/>\r$/m);
+      expect(t).toContain('isModernUIOnlyNode="True"');
+      expect(t).toMatch(/<Field FieldName="\w+" TypeName="[\w?]+" MapDbTable="\w+" TextAttributes="#CDATA" StorageName="AddColumn">/);
       expect(t.split(LF).slice(0, -1).every((l) => l.endsWith(CR))).toBe(true);
       expect(t).toContain('Title="Orders &amp; Returns"');
       expect(t).toContain('&quot;Express&quot;');
@@ -118,6 +122,10 @@ describe('project fixture', () => {
     const eps = sidecar.items.filter((i) => i.element === 'EntityEndpoint').map((i) => i.id);
     expect(eps).toContain('EntityEndpoint:ContosoEndpoint@23.200.001');
     expect(eps).toContain('EntityEndpoint:ContosoEndpoint@24.200.001');
+    expect(item('EntityEndpoint:ContosoEndpoint@24.200.001').status).toBe('only-b');
+    expect(item('EntityEndpoint:ContosoEndpoint@23.200.001').status).toBe('modified');
+    expect(sidecar.items.some((i) => i.element === 'Page' && i.status === 'same' && i.a?.startLine !== i.b?.startLine && (sidecar.edits.moved ?? []).includes(i.key))).toBe(true);
+    expect(sidecar.items.some((i) => i.element === 'Page' && i.status === 'modified')).toBe(true);
     expect(item('SiteMapNode:SO301000').detail).toBe('Orders & Returns');
   });
 
