@@ -491,13 +491,14 @@ describe.skipIf(!existsSync('fixtures/large-a.xml'))('large fixture (node timing
 });
 
 describe.skipIf(!existsSync('fixtures/project-a.xml'))('project fixture pair vs fixtures/project.changes.json', () => {
-  it('every item matches the sidecar: id, group, name, status, views, line ranges, counts', async () => {
+  it('every item matches the sidecar exactly: id, element, group, name, detail, screenId, status, views, line ranges, counts', async () => {
     interface Expected {
       id: string;
       element: string;
       group: string;
       name: string;
       detail: string;
+      screenId?: string | null;
       status: string;
       views: string[];
       a: { startLine: number; endLine: number } | null;
@@ -508,20 +509,14 @@ describe.skipIf(!existsSync('fixtures/project-a.xml'))('project fixture pair vs 
     const got = new Map(idx.items.map((i) => [i.id, i]));
     const diffs: string[] = [];
     for (const e of oracle.items) {
-      // Until QA's sidecar follows 0998de6, accept `EntityEndpoint:<Name>` for `<Name>@<Version>`.
-      const legacy = e.element === 'EntityEndpoint' && !e.id.includes('@') ? [...got.keys()].filter((k) => k.startsWith(`${e.id}@`)) : [];
-      if (legacy.length === 1 && legacy[0]) e.id = legacy[0];
       const g = got.get(e.id);
       if (!g) {
         diffs.push(`missing ${e.id}`);
         continue;
       }
       got.delete(e.id);
-      // `detail` is left to the classifier tests: the sidecar predates e0d55ac's detail rules.
-      // The sidecar may predate the 'changes' view (da0a450); compare without it then.
-      const gotViews = g.views.map((v) => v.id).filter((v) => v !== 'changes' || e.views.includes('changes'));
-      const actual = { element: g.element, group: g.group, name: g.name, status: g.status, views: gotViews, a: g.a, b: g.b };
-      const want = { element: e.element, group: e.group, name: e.name, status: e.status, views: e.views, a: e.a, b: e.b };
+      const actual = { element: g.element, group: g.group, name: g.name, detail: g.detail, screenId: g.screenId ?? null, status: g.status, views: g.views.map((v) => v.id), a: g.a, b: g.b };
+      const want = { element: e.element, group: e.group, name: e.name, detail: e.detail, screenId: e.screenId ?? null, status: e.status, views: e.views, a: e.a, b: e.b };
       for (const k of Object.keys(want) as (keyof typeof want)[]) {
         if (JSON.stringify(actual[k]) !== JSON.stringify(want[k])) diffs.push(`${e.id}.${k}: got ${JSON.stringify(actual[k])}, want ${JSON.stringify(want[k])}`);
       }
