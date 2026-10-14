@@ -19,6 +19,8 @@ import 'monaco-editor/features/multicursor/register';
 import 'monaco-editor/features/wordOperations/register';
 import 'monaco-editor/features/linesOperations/register';
 import 'monaco-editor/features/gotoLine/register';
+// Ctrl+M (toggle Tab moves focus): without it the panes are a keyboard trap.
+import 'monaco-editor/features/toggleTabFocusMode/register';
 import EditorWorker from 'monaco-editor/editor/editor.worker?worker';
 import { installDiffProvider } from './diff-provider';
 import { applyMonacoPatches } from './monaco-patches';

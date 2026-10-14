@@ -208,6 +208,38 @@ async function main(): Promise<void> {
   const viewer = await page.locator('.diff-review:visible, .accessible-diff-viewer:visible').count();
   check('Alt+Up/Down do not move lines; F7 opens no diff viewer', keys === keysAfter && viewer === 0, `viewer=${viewer}`);
 
+  // --- keyboard focus can leave the panes (Ctrl+M = Tab moves focus) -------
+  const focusAt = () =>
+    page.evaluate(() => {
+      const a = document.activeElement;
+      if (a?.closest('.original-in-monaco-diff-editor')) return 'A';
+      if (a?.closest('.modified-in-monaco-diff-editor')) return 'B';
+      return 'outside';
+    });
+  const focusTrail: string[] = [];
+  for (const [mode, side] of [['side-by-side', 'a'], ['side-by-side', 'b'], ['inline', 'b']] as const) {
+    await page.evaluate((m) => window.__engine!.setOptions({ viewMode: m }), mode);
+    await page.waitForTimeout(150);
+    const textBefore = await page.evaluate(() => window.__engine!.getText('a') + ' ' + window.__engine!.getText('b'));
+    await page.evaluate((s) => window.__engine!.focus(s), side);
+    await page.keyboard.press('Control+m');
+    await page.keyboard.press(side === 'a' ? 'Shift+Tab' : 'Tab');
+    const out = await focusAt();
+    await page.evaluate((s) => window.__engine!.focus(s), side);
+    await page.keyboard.press('Shift+Tab');
+    const back = await focusAt();
+    await page.evaluate((s) => window.__engine!.focus(s), side);
+    await page.keyboard.press('Control+m'); // tab focus mode off again
+    const textAfter = await page.evaluate(() => window.__engine!.getText('a') + ' ' + window.__engine!.getText('b'));
+    focusTrail.push(`${mode}/${side}: tab→${out} shift-tab→${back}${textBefore === textAfter ? '' : ' TEXT CHANGED'}`);
+  }
+  await page.evaluate(() => window.__engine!.setOptions({ viewMode: 'side-by-side' }));
+  check(
+    'Ctrl+M then Tab/Shift+Tab leaves the panes; inline skips hidden A',
+    focusTrail.join('|') === 'side-by-side/a: tab→outside shift-tab→outside|side-by-side/b: tab→outside shift-tab→A|inline/b: tab→outside shift-tab→outside',
+    focusTrail.join(' | '),
+  );
+
   // --- paste 10 MB into an empty pane --------------------------------------
   await untilDiff(page, "e.setText('a', ''); e.setText('b', '');");
   const paste = await page.evaluate(async () => {

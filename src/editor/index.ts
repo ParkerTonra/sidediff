@@ -172,7 +172,9 @@ export function createDiffEngine(): DiffEngine {
     // The DiffEditor forces minimap and folding off on both sides on every
     // updateOptions; set them on the sub-editors directly afterwards.
     const sub = { minimap: mapped.minimap, folding: mapped.folding };
-    diffEditor.getOriginalEditor().updateOptions(sub);
+    // Inline mode hides the original editor but leaves it focusable; keep it
+    // out of the tab order so keyboard focus never lands in an invisible pane.
+    diffEditor.getOriginalEditor().updateOptions({ ...sub, tabIndex: mapped.renderSideBySide ? 0 : -1 });
     diffEditor.getModifiedEditor().updateOptions(sub);
   }
 
