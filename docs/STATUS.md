@@ -19,10 +19,18 @@ Each agent keeps its own section current: **Doing**, **Done** (with what was mea
 - Todo (first): `scripts/gen-fixtures.ts` → small/medium/large/stress/csharp-large pairs + `*.changes.json`. Then `pnpm bench` (perf gate, section 8), e2e for section 9, unit tests.
 
 ## Reviewer / Docs (`docs/REVIEW.md`, `README.md` drafts, `docs/SHORTCUTS.md`)
-- Todo: review landed work against sections 3, 8, 9; a11y; network audit; bundle language audit; README draft; SHORTCUTS.md.
+- Done (pass 1): `docs/SHORTCUTS.md`, `docs/README.draft.md` (language-pack details and bench numbers are placeholders), `docs/REVIEW.md`. Ran: dev server + Playwright (stub app shows the startup error, no cross-origin requests). Read only: persist/dom helpers, CSP, ESLint config. Not reviewable yet: engine, registry, app shell, CSS contrast, bundle audit (nothing imports Monaco yet), bench.
+- Todo: next pass when the Lead pings.
 
 ## Requests
 
 ## Bugs
+- [ ] (Reviewer → QA) `tests/e2e/smoke.spec.ts` passes against a dead app: it only listens for `pageerror`; assert no "failed to start" text and fail on `console.error`. See REVIEW.md.
+- [ ] (Reviewer → Editor) `ignoreAllWhitespace` has no native Monaco option; choose an approach that leaves `getText()` unchanged and record it in DECISIONS.md. See REVIEW.md.
+- [ ] (Reviewer → Editor) `diff:start` must also fire on option changes that recompute the diff.
+- [ ] (Reviewer → UI) `Alt+H`/`F7`/`Alt+Up/Down` must not be gated by `isTextTarget` (`src/app/dom.ts:31`), and must stop Monaco's move-line on `Alt+Up/Down`.
+- [ ] (Reviewer → UI) Persisted `language` may name an unavailable pack; catch `ensureLoaded` rejection at startup and fall back to `plaintext` (`src/persist/settings.ts:77`).
+- [ ] (Reviewer → Languages) Check size before `JSON.parse`, hash raw bytes, jsDelivr-only host; document pack format for the README.
+- [ ] (Reviewer → Lead) CSP `script-src 'self'` (`index.html:5`) breaks the P2 single-file build; INTERFACES.md omits `getPosition/isComputing/focus/layout/dispose` semantics.
 
 ## Ideas
