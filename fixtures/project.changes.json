@@ -1,0 +1,3313 @@
+{
+  "fixture": "project",
+  "kind": "project",
+  "seed": 1562312960,
+  "generator": "scripts/gen-fixtures.ts (scripts/lib/project-gen.ts)",
+  "a": {
+    "file": "project-a.xml",
+    "lines": 19887,
+    "bytes": 981617,
+    "sha256": "74b7aabf70d9103722cd8cae3dfb0fc6039f84d248c5863def695555c0676756",
+    "root": {
+      "level": "0",
+      "description": "Contoso order management (customer copy)",
+      "product-version": "24.200.0001"
+    }
+  },
+  "b": {
+    "file": "project-b.xml",
+    "lines": 19577,
+    "bytes": 966204,
+    "sha256": "d0f8b4d6a18cdfb5023993244b721409c7cdf2c5517850408d2ac64ab4c87a03",
+    "root": {
+      "level": "0",
+      "description": "Contoso order management (dev)",
+      "product-version": "25.100.0119"
+    }
+  },
+  "counts": {
+    "total": 157,
+    "byStatus": {
+      "same": 123,
+      "whitespace": 4,
+      "modified": 20,
+      "only-a": 6,
+      "only-b": 4
+    },
+    "byGroup": {
+      "code": 81,
+      "screens": 22,
+      "tables": 20,
+      "sql": 8,
+      "reports": 4,
+      "inquiries": 5,
+      "sitemap": 8,
+      "integration": 2,
+      "files": 4,
+      "other": 3
+    }
+  },
+  "cdataSplit": {
+    "id": "Graph:POLineExt_Freight6",
+    "mustContain": "idx[0]]> 0"
+  },
+  "edits": {
+    "onlyA": [
+      "PMTaskExt_Carrier5",
+      "~/pages/ar/ar376242.aspx",
+      "CRCaseAllocation4",
+      "App_Code\\Caches\\POOrderWarranty2.cs",
+      "SO254994",
+      "PO456494"
+    ],
+    "onlyB": [
+      "SOOrderExt_AddedInB",
+      "UsrRouteAudit",
+      "SO509999",
+      "fr-FR"
+    ],
+    "modified": [
+      "POOrderEntry_AllocationExt0",
+      "CustomerMaint_ApprovalExt1",
+      "ProjectEntry_BatchExt2",
+      "SOOrderEntry_CarrierExt8",
+      "CRCaseMaint_RegionExt9",
+      "CRCaseMaint_AllocationExt15",
+      "INReceiptEntry_BatchExt21",
+      "CustomerMaint_RegionExt30",
+      "App_Code\\Caches\\BAccountBackorder0.cs",
+      "App_Code\\Caches\\PMTaskRoute7.cs",
+      "~/pages/ap/ap301001.aspx",
+      "~/pages/po/po401234.aspx",
+      "InventoryItemInventory6",
+      "SOLine",
+      "UsrFreightHistory1",
+      "SO641000.rpx",
+      "PM208586",
+      "CT-RegionMargin0",
+      "ContosoEndpoint1",
+      "Pages\\SO\\SO301000Ext.aspx"
+    ],
+    "whitespace": [
+      "INReceiptEntry_CarrierExt3",
+      "ARInvoiceEntry_CustomerExt4",
+      "POLineInventory2",
+      "App_Code\\Caches\\BAccountCarrier5.cs"
+    ],
+    "moved": [
+      "BAccountMargin8",
+      "POOrderEntry_AllocationExt20"
+    ]
+  },
+  "items": [
+    {
+      "id": "File:App_Code\\Caches\\APInvoiceBackorder13.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\APInvoiceBackorder13.cs",
+      "group": "code",
+      "name": "APInvoiceBackorder13.cs",
+      "detail": "App_Code\\Caches\\APInvoiceBackorder13.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 15092,
+        "endLine": 15289
+      },
+      "b": {
+        "startLine": 14780,
+        "endLine": 14977
+      }
+    },
+    {
+      "id": "Graph:APInvoiceEntry_ApprovalExt24",
+      "element": "Graph",
+      "key": "APInvoiceEntry_ApprovalExt24",
+      "group": "code",
+      "name": "APInvoiceEntry_ApprovalExt24",
+      "detail": "New graph",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 5786,
+        "endLine": 5979
+      },
+      "b": {
+        "startLine": 5434,
+        "endLine": 5627
+      }
+    },
+    {
+      "id": "Graph:APInvoiceEntry_ShipmentExt10",
+      "element": "Graph",
+      "key": "APInvoiceEntry_ShipmentExt10",
+      "group": "code",
+      "name": "APInvoiceEntry_ShipmentExt10",
+      "detail": "New graph",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 2326,
+        "endLine": 2467
+      },
+      "b": {
+        "startLine": 2207,
+        "endLine": 2348
+      }
+    },
+    {
+      "id": "Graph:APInvoiceEntry_VendorExt41",
+      "element": "Graph",
+      "key": "APInvoiceEntry_VendorExt41",
+      "group": "code",
+      "name": "APInvoiceEntry_VendorExt41",
+      "detail": "Graph extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 9953,
+        "endLine": 10238
+      },
+      "b": {
+        "startLine": 9727,
+        "endLine": 10012
+      }
+    },
+    {
+      "id": "Graph:APInvoiceExt_Warranty19",
+      "element": "Graph",
+      "key": "APInvoiceExt_Warranty19",
+      "group": "code",
+      "name": "APInvoiceExt_Warranty19",
+      "detail": "DAC extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 4649,
+        "endLine": 5006
+      },
+      "b": {
+        "startLine": 4530,
+        "endLine": 4887
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\APInvoiceRoute24.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\APInvoiceRoute24.cs",
+      "group": "code",
+      "name": "APInvoiceRoute24.cs",
+      "detail": "App_Code\\Caches\\APInvoiceRoute24.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 17466,
+        "endLine": 17735
+      },
+      "b": {
+        "startLine": 17154,
+        "endLine": 17423
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\APInvoiceShipment20.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\APInvoiceShipment20.cs",
+      "group": "code",
+      "name": "APInvoiceShipment20.cs",
+      "detail": "App_Code\\Caches\\APInvoiceShipment20.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 16691,
+        "endLine": 16763
+      },
+      "b": {
+        "startLine": 16379,
+        "endLine": 16451
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\ARInvoiceCommission29.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\ARInvoiceCommission29.cs",
+      "group": "code",
+      "name": "ARInvoiceCommission29.cs",
+      "detail": "App_Code\\Caches\\ARInvoiceCommission29.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 18582,
+        "endLine": 18859
+      },
+      "b": {
+        "startLine": 18270,
+        "endLine": 18547
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\ARInvoiceCustomer19.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\ARInvoiceCustomer19.cs",
+      "group": "code",
+      "name": "ARInvoiceCustomer19.cs",
+      "detail": "App_Code\\Caches\\ARInvoiceCustomer19.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 16397,
+        "endLine": 16690
+      },
+      "b": {
+        "startLine": 16085,
+        "endLine": 16378
+      }
+    },
+    {
+      "id": "Graph:ARInvoiceEntry_CustomerExt4",
+      "element": "Graph",
+      "key": "ARInvoiceEntry_CustomerExt4",
+      "group": "code",
+      "name": "ARInvoiceEntry_CustomerExt4",
+      "detail": "Graph extension",
+      "status": "whitespace",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 1096,
+        "endLine": 1310
+      },
+      "b": {
+        "startLine": 1329,
+        "endLine": 1543
+      }
+    },
+    {
+      "id": "Graph:ARInvoiceEntry_FreightExt27",
+      "element": "Graph",
+      "key": "ARInvoiceEntry_FreightExt27",
+      "group": "code",
+      "name": "ARInvoiceEntry_FreightExt27",
+      "detail": "Graph extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 6463,
+        "endLine": 6580
+      },
+      "b": {
+        "startLine": 6111,
+        "endLine": 6228
+      }
+    },
+    {
+      "id": "Graph:ARInvoiceExt_Credit12",
+      "element": "Graph",
+      "key": "ARInvoiceExt_Credit12",
+      "group": "code",
+      "name": "ARInvoiceExt_Credit12",
+      "detail": "DAC extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 2618,
+        "endLine": 3018
+      },
+      "b": {
+        "startLine": 2499,
+        "endLine": 2899
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\ARInvoiceFreight8.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\ARInvoiceFreight8.cs",
+      "group": "code",
+      "name": "ARInvoiceFreight8.cs",
+      "detail": "App_Code\\Caches\\ARInvoiceFreight8.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 13895,
+        "endLine": 14131
+      },
+      "b": {
+        "startLine": 13583,
+        "endLine": 13819
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\ARInvoiceLot26.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\ARInvoiceLot26.cs",
+      "group": "code",
+      "name": "ARInvoiceLot26.cs",
+      "detail": "App_Code\\Caches\\ARInvoiceLot26.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 17877,
+        "endLine": 18162
+      },
+      "b": {
+        "startLine": 17565,
+        "endLine": 17850
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\ARInvoiceMargin15.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\ARInvoiceMargin15.cs",
+      "group": "code",
+      "name": "ARInvoiceMargin15.cs",
+      "detail": "App_Code\\Caches\\ARInvoiceMargin15.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 15568,
+        "endLine": 15853
+      },
+      "b": {
+        "startLine": 15256,
+        "endLine": 15541
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\ARInvoiceShipment16.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\ARInvoiceShipment16.cs",
+      "group": "code",
+      "name": "ARInvoiceShipment16.cs",
+      "detail": "App_Code\\Caches\\ARInvoiceShipment16.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 15854,
+        "endLine": 16003
+      },
+      "b": {
+        "startLine": 15542,
+        "endLine": 15691
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\BAccountBackorder0.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\BAccountBackorder0.cs",
+      "group": "code",
+      "name": "BAccountBackorder0.cs",
+      "detail": "App_Code\\Caches\\BAccountBackorder0.cs",
+      "status": "modified",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 12215,
+        "endLine": 12516
+      },
+      "b": {
+        "startLine": 11989,
+        "endLine": 12290
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\BAccountCarrier5.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\BAccountCarrier5.cs",
+      "group": "code",
+      "name": "BAccountCarrier5.cs",
+      "detail": "App_Code\\Caches\\BAccountCarrier5.cs",
+      "status": "whitespace",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 13220,
+        "endLine": 13515
+      },
+      "b": {
+        "startLine": 12908,
+        "endLine": 13203
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\BAccountContract21.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\BAccountContract21.cs",
+      "group": "code",
+      "name": "BAccountContract21.cs",
+      "detail": "App_Code\\Caches\\BAccountContract21.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 16764,
+        "endLine": 16948
+      },
+      "b": {
+        "startLine": 16452,
+        "endLine": 16636
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\BAccountRebate28.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\BAccountRebate28.cs",
+      "group": "code",
+      "name": "BAccountRebate28.cs",
+      "detail": "App_Code\\Caches\\BAccountRebate28.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 18346,
+        "endLine": 18581
+      },
+      "b": {
+        "startLine": 18034,
+        "endLine": 18269
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\BAccountShipment4.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\BAccountShipment4.cs",
+      "group": "code",
+      "name": "BAccountShipment4.cs",
+      "detail": "App_Code\\Caches\\BAccountShipment4.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 12962,
+        "endLine": 13219
+      },
+      "b": {
+        "startLine": 12650,
+        "endLine": 12907
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\CRCaseCustomer11.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\CRCaseCustomer11.cs",
+      "group": "code",
+      "name": "CRCaseCustomer11.cs",
+      "detail": "App_Code\\Caches\\CRCaseCustomer11.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 14635,
+        "endLine": 14819
+      },
+      "b": {
+        "startLine": 14323,
+        "endLine": 14507
+      }
+    },
+    {
+      "id": "Graph:CRCaseExt_Vendor40",
+      "element": "Graph",
+      "key": "CRCaseExt_Vendor40",
+      "group": "code",
+      "name": "CRCaseExt_Vendor40",
+      "detail": "DAC extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 9587,
+        "endLine": 9952
+      },
+      "b": {
+        "startLine": 9235,
+        "endLine": 9600
+      }
+    },
+    {
+      "id": "Graph:CRCaseMaint_AllocationExt15",
+      "element": "Graph",
+      "key": "CRCaseMaint_AllocationExt15",
+      "group": "code",
+      "name": "CRCaseMaint_AllocationExt15",
+      "detail": "Graph extension",
+      "status": "modified",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 3477,
+        "endLine": 3823
+      },
+      "b": {
+        "startLine": 3358,
+        "endLine": 3704
+      }
+    },
+    {
+      "id": "Graph:CRCaseMaint_BatchExt38",
+      "element": "Graph",
+      "key": "CRCaseMaint_BatchExt38",
+      "group": "code",
+      "name": "CRCaseMaint_BatchExt38",
+      "detail": "New graph",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 9091,
+        "endLine": 9432
+      },
+      "b": {
+        "startLine": 8739,
+        "endLine": 9080
+      }
+    },
+    {
+      "id": "Graph:CRCaseMaint_CarrierExt23",
+      "element": "Graph",
+      "key": "CRCaseMaint_CarrierExt23",
+      "group": "code",
+      "name": "CRCaseMaint_CarrierExt23",
+      "detail": "Graph extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 5628,
+        "endLine": 5785
+      },
+      "b": {
+        "startLine": 5276,
+        "endLine": 5433
+      }
+    },
+    {
+      "id": "Graph:CRCaseMaint_MarginExt35",
+      "element": "Graph",
+      "key": "CRCaseMaint_MarginExt35",
+      "group": "code",
+      "name": "CRCaseMaint_MarginExt35",
+      "detail": "Graph extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 8193,
+        "endLine": 8590
+      },
+      "b": {
+        "startLine": 7841,
+        "endLine": 8238
+      }
+    },
+    {
+      "id": "Graph:CRCaseMaint_RegionExt9",
+      "element": "Graph",
+      "key": "CRCaseMaint_RegionExt9",
+      "group": "code",
+      "name": "CRCaseMaint_RegionExt9",
+      "detail": "Graph extension",
+      "status": "modified",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 2175,
+        "endLine": 2324
+      },
+      "b": {
+        "startLine": 2056,
+        "endLine": 2205
+      }
+    },
+    {
+      "id": "Graph:CRCaseMaint_ShipmentExt14",
+      "element": "Graph",
+      "key": "CRCaseMaint_ShipmentExt14",
+      "group": "code",
+      "name": "CRCaseMaint_ShipmentExt14",
+      "detail": "Graph extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 3193,
+        "endLine": 3476
+      },
+      "b": {
+        "startLine": 3074,
+        "endLine": 3357
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\CRCaseOrder27.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\CRCaseOrder27.cs",
+      "group": "code",
+      "name": "CRCaseOrder27.cs",
+      "detail": "App_Code\\Caches\\CRCaseOrder27.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 18163,
+        "endLine": 18345
+      },
+      "b": {
+        "startLine": 17851,
+        "endLine": 18033
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\CRCaseRoute17.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\CRCaseRoute17.cs",
+      "group": "code",
+      "name": "CRCaseRoute17.cs",
+      "detail": "App_Code\\Caches\\CRCaseRoute17.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 16004,
+        "endLine": 16081
+      },
+      "b": {
+        "startLine": 15692,
+        "endLine": 15769
+      }
+    },
+    {
+      "id": "Graph:CustomerMaint_ApprovalExt1",
+      "element": "Graph",
+      "key": "CustomerMaint_ApprovalExt1",
+      "group": "code",
+      "name": "CustomerMaint_ApprovalExt1",
+      "detail": "Graph extension",
+      "status": "modified",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 314,
+        "endLine": 591
+      },
+      "b": {
+        "startLine": 314,
+        "endLine": 591
+      }
+    },
+    {
+      "id": "Graph:CustomerMaint_InventoryExt44",
+      "element": "Graph",
+      "key": "CustomerMaint_InventoryExt44",
+      "group": "code",
+      "name": "CustomerMaint_InventoryExt44",
+      "detail": "Graph extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 10775,
+        "endLine": 11055
+      },
+      "b": {
+        "startLine": 10549,
+        "endLine": 10829
+      }
+    },
+    {
+      "id": "Graph:CustomerMaint_RegionExt30",
+      "element": "Graph",
+      "key": "CustomerMaint_RegionExt30",
+      "group": "code",
+      "name": "CustomerMaint_RegionExt30",
+      "detail": "Graph extension",
+      "status": "modified",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 7020,
+        "endLine": 7137
+      },
+      "b": {
+        "startLine": 6668,
+        "endLine": 6785
+      }
+    },
+    {
+      "id": "Graph:INReceiptEntry_BatchExt21",
+      "element": "Graph",
+      "key": "INReceiptEntry_BatchExt21",
+      "group": "code",
+      "name": "INReceiptEntry_BatchExt21",
+      "detail": "Graph extension",
+      "status": "modified",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 5240,
+        "endLine": 5389
+      },
+      "b": {
+        "startLine": 4888,
+        "endLine": 5037
+      }
+    },
+    {
+      "id": "Graph:INReceiptEntry_CarrierExt3",
+      "element": "Graph",
+      "key": "INReceiptEntry_CarrierExt3",
+      "group": "code",
+      "name": "INReceiptEntry_CarrierExt3",
+      "detail": "New graph",
+      "status": "whitespace",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 989,
+        "endLine": 1095
+      },
+      "b": {
+        "startLine": 1222,
+        "endLine": 1328
+      }
+    },
+    {
+      "id": "Graph:INReceiptEntry_CarrierExt43",
+      "element": "Graph",
+      "key": "INReceiptEntry_CarrierExt43",
+      "group": "code",
+      "name": "INReceiptEntry_CarrierExt43",
+      "detail": "Graph extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 10479,
+        "endLine": 10774
+      },
+      "b": {
+        "startLine": 10253,
+        "endLine": 10548
+      }
+    },
+    {
+      "id": "Graph:INReceiptEntry_ShipmentExt32",
+      "element": "Graph",
+      "key": "INReceiptEntry_ShipmentExt32",
+      "group": "code",
+      "name": "INReceiptEntry_ShipmentExt32",
+      "detail": "Graph extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 7416,
+        "endLine": 7660
+      },
+      "b": {
+        "startLine": 7064,
+        "endLine": 7308
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\INTranAllocation25.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\INTranAllocation25.cs",
+      "group": "code",
+      "name": "INTranAllocation25.cs",
+      "detail": "App_Code\\Caches\\INTranAllocation25.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 17736,
+        "endLine": 17876
+      },
+      "b": {
+        "startLine": 17424,
+        "endLine": 17564
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\INTranVendor9.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\INTranVendor9.cs",
+      "group": "code",
+      "name": "INTranVendor9.cs",
+      "detail": "App_Code\\Caches\\INTranVendor9.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 14132,
+        "endLine": 14428
+      },
+      "b": {
+        "startLine": 13820,
+        "endLine": 14116
+      }
+    },
+    {
+      "id": "Graph:InventoryItemMaint_OrderExt46",
+      "element": "Graph",
+      "key": "InventoryItemMaint_OrderExt46",
+      "group": "code",
+      "name": "InventoryItemMaint_OrderExt46",
+      "detail": "Graph extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 11150,
+        "endLine": 11487
+      },
+      "b": {
+        "startLine": 10924,
+        "endLine": 11261
+      }
+    },
+    {
+      "id": "Graph:InventoryItemMaint_ShipmentExt25",
+      "element": "Graph",
+      "key": "InventoryItemMaint_ShipmentExt25",
+      "group": "code",
+      "name": "InventoryItemMaint_ShipmentExt25",
+      "detail": "Graph extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 5980,
+        "endLine": 6065
+      },
+      "b": {
+        "startLine": 5628,
+        "endLine": 5713
+      }
+    },
+    {
+      "id": "Graph:InventoryItemMaint_WarrantyExt22",
+      "element": "Graph",
+      "key": "InventoryItemMaint_WarrantyExt22",
+      "group": "code",
+      "name": "InventoryItemMaint_WarrantyExt22",
+      "detail": "Graph extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 5390,
+        "endLine": 5627
+      },
+      "b": {
+        "startLine": 5038,
+        "endLine": 5275
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\PMTaskBatch22.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\PMTaskBatch22.cs",
+      "group": "code",
+      "name": "PMTaskBatch22.cs",
+      "detail": "App_Code\\Caches\\PMTaskBatch22.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 16949,
+        "endLine": 17210
+      },
+      "b": {
+        "startLine": 16637,
+        "endLine": 16898
+      }
+    },
+    {
+      "id": "Graph:PMTaskExt_Backorder33",
+      "element": "Graph",
+      "key": "PMTaskExt_Backorder33",
+      "group": "code",
+      "name": "PMTaskExt_Backorder33",
+      "detail": "DAC extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 7661,
+        "endLine": 7994
+      },
+      "b": {
+        "startLine": 7309,
+        "endLine": 7642
+      }
+    },
+    {
+      "id": "Graph:PMTaskExt_Carrier5",
+      "element": "Graph",
+      "key": "PMTaskExt_Carrier5",
+      "group": "code",
+      "name": "PMTaskExt_Carrier5",
+      "detail": "DAC extension",
+      "status": "only-a",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 1311,
+        "endLine": 1662
+      },
+      "b": null
+    },
+    {
+      "id": "File:App_Code\\Caches\\PMTaskRoute7.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\PMTaskRoute7.cs",
+      "group": "code",
+      "name": "PMTaskRoute7.cs",
+      "detail": "App_Code\\Caches\\PMTaskRoute7.cs",
+      "status": "modified",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 13785,
+        "endLine": 13894
+      },
+      "b": {
+        "startLine": 13473,
+        "endLine": 13582
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\POLineBatch6.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\POLineBatch6.cs",
+      "group": "code",
+      "name": "POLineBatch6.cs",
+      "detail": "App_Code\\Caches\\POLineBatch6.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 13516,
+        "endLine": 13784
+      },
+      "b": {
+        "startLine": 13204,
+        "endLine": 13472
+      }
+    },
+    {
+      "id": "Graph:POLineExt_Customer28",
+      "element": "Graph",
+      "key": "POLineExt_Customer28",
+      "group": "code",
+      "name": "POLineExt_Customer28",
+      "detail": "New DAC",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 6581,
+        "endLine": 6733
+      },
+      "b": {
+        "startLine": 6229,
+        "endLine": 6381
+      }
+    },
+    {
+      "id": "Graph:POLineExt_Freight6",
+      "element": "Graph",
+      "key": "POLineExt_Freight6",
+      "group": "code",
+      "name": "POLineExt_Freight6",
+      "detail": "New DAC",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 1663,
+        "endLine": 1958
+      },
+      "b": {
+        "startLine": 1544,
+        "endLine": 1839
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\POOrderContract18.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\POOrderContract18.cs",
+      "group": "code",
+      "name": "POOrderContract18.cs",
+      "detail": "App_Code\\Caches\\POOrderContract18.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 16082,
+        "endLine": 16396
+      },
+      "b": {
+        "startLine": 15770,
+        "endLine": 16084
+      }
+    },
+    {
+      "id": "Graph:POOrderEntry_AllocationExt0",
+      "element": "Graph",
+      "key": "POOrderEntry_AllocationExt0",
+      "group": "code",
+      "name": "POOrderEntry_AllocationExt0",
+      "detail": "Graph extension",
+      "status": "modified",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 3,
+        "endLine": 313
+      },
+      "b": {
+        "startLine": 3,
+        "endLine": 313
+      }
+    },
+    {
+      "id": "Graph:POOrderEntry_AllocationExt20",
+      "element": "Graph",
+      "key": "POOrderEntry_AllocationExt20",
+      "group": "code",
+      "name": "POOrderEntry_AllocationExt20",
+      "detail": "Graph extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 5007,
+        "endLine": 5239
+      },
+      "b": {
+        "startLine": 989,
+        "endLine": 1221
+      }
+    },
+    {
+      "id": "Graph:POOrderExt_Batch39",
+      "element": "Graph",
+      "key": "POOrderExt_Batch39",
+      "group": "code",
+      "name": "POOrderExt_Batch39",
+      "detail": "New DAC",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 9433,
+        "endLine": 9586
+      },
+      "b": {
+        "startLine": 9081,
+        "endLine": 9234
+      }
+    },
+    {
+      "id": "Graph:POOrderExt_Order26",
+      "element": "Graph",
+      "key": "POOrderExt_Order26",
+      "group": "code",
+      "name": "POOrderExt_Order26",
+      "detail": "DAC extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 6066,
+        "endLine": 6462
+      },
+      "b": {
+        "startLine": 5714,
+        "endLine": 6110
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\POOrderMargin14.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\POOrderMargin14.cs",
+      "group": "code",
+      "name": "POOrderMargin14.cs",
+      "detail": "App_Code\\Caches\\POOrderMargin14.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 15290,
+        "endLine": 15567
+      },
+      "b": {
+        "startLine": 14978,
+        "endLine": 15255
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\POOrderRebate12.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\POOrderRebate12.cs",
+      "group": "code",
+      "name": "POOrderRebate12.cs",
+      "detail": "App_Code\\Caches\\POOrderRebate12.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 14820,
+        "endLine": 15091
+      },
+      "b": {
+        "startLine": 14508,
+        "endLine": 14779
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\POOrderWarranty2.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\POOrderWarranty2.cs",
+      "group": "code",
+      "name": "POOrderWarranty2.cs",
+      "detail": "App_Code\\Caches\\POOrderWarranty2.cs",
+      "status": "only-a",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 12683,
+        "endLine": 12768
+      },
+      "b": null
+    },
+    {
+      "id": "Graph:ProjectEntry_BatchExt18",
+      "element": "Graph",
+      "key": "ProjectEntry_BatchExt18",
+      "group": "code",
+      "name": "ProjectEntry_BatchExt18",
+      "detail": "Graph extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 4325,
+        "endLine": 4648
+      },
+      "b": {
+        "startLine": 4206,
+        "endLine": 4529
+      }
+    },
+    {
+      "id": "Graph:ProjectEntry_BatchExt2",
+      "element": "Graph",
+      "key": "ProjectEntry_BatchExt2",
+      "group": "code",
+      "name": "ProjectEntry_BatchExt2",
+      "detail": "Graph extension",
+      "status": "modified",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 592,
+        "endLine": 988
+      },
+      "b": {
+        "startLine": 592,
+        "endLine": 988
+      }
+    },
+    {
+      "id": "Graph:ProjectEntry_BatchExt42",
+      "element": "Graph",
+      "key": "ProjectEntry_BatchExt42",
+      "group": "code",
+      "name": "ProjectEntry_BatchExt42",
+      "detail": "Graph extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 10239,
+        "endLine": 10478
+      },
+      "b": {
+        "startLine": 10013,
+        "endLine": 10252
+      }
+    },
+    {
+      "id": "Graph:ProjectEntry_CreditExt45",
+      "element": "Graph",
+      "key": "ProjectEntry_CreditExt45",
+      "group": "code",
+      "name": "ProjectEntry_CreditExt45",
+      "detail": "New graph",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 11056,
+        "endLine": 11149
+      },
+      "b": {
+        "startLine": 10830,
+        "endLine": 10923
+      }
+    },
+    {
+      "id": "Graph:ProjectEntry_CustomerExt37",
+      "element": "Graph",
+      "key": "ProjectEntry_CustomerExt37",
+      "group": "code",
+      "name": "ProjectEntry_CustomerExt37",
+      "detail": "Graph extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 8933,
+        "endLine": 9090
+      },
+      "b": {
+        "startLine": 8581,
+        "endLine": 8738
+      }
+    },
+    {
+      "id": "Graph:ProjectEntry_FreightExt36",
+      "element": "Graph",
+      "key": "ProjectEntry_FreightExt36",
+      "group": "code",
+      "name": "ProjectEntry_FreightExt36",
+      "detail": "Graph extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 8591,
+        "endLine": 8932
+      },
+      "b": {
+        "startLine": 8239,
+        "endLine": 8580
+      }
+    },
+    {
+      "id": "Graph:ProjectEntry_LotExt13",
+      "element": "Graph",
+      "key": "ProjectEntry_LotExt13",
+      "group": "code",
+      "name": "ProjectEntry_LotExt13",
+      "detail": "Graph extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 3019,
+        "endLine": 3192
+      },
+      "b": {
+        "startLine": 2900,
+        "endLine": 3073
+      }
+    },
+    {
+      "id": "Graph:ProjectEntry_RouteExt11",
+      "element": "Graph",
+      "key": "ProjectEntry_RouteExt11",
+      "group": "code",
+      "name": "ProjectEntry_RouteExt11",
+      "detail": "Graph extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 2468,
+        "endLine": 2617
+      },
+      "b": {
+        "startLine": 2349,
+        "endLine": 2498
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\SOLineBackorder10.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\SOLineBackorder10.cs",
+      "group": "code",
+      "name": "SOLineBackorder10.cs",
+      "detail": "App_Code\\Caches\\SOLineBackorder10.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 14429,
+        "endLine": 14634
+      },
+      "b": {
+        "startLine": 14117,
+        "endLine": 14322
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\SOLineCarrier3.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\SOLineCarrier3.cs",
+      "group": "code",
+      "name": "SOLineCarrier3.cs",
+      "detail": "App_Code\\Caches\\SOLineCarrier3.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 12769,
+        "endLine": 12961
+      },
+      "b": {
+        "startLine": 12457,
+        "endLine": 12649
+      }
+    },
+    {
+      "id": "Graph:SOOrderEntry_AllocationExt31",
+      "element": "Graph",
+      "key": "SOOrderEntry_AllocationExt31",
+      "group": "code",
+      "name": "SOOrderEntry_AllocationExt31",
+      "detail": "New graph",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 7138,
+        "endLine": 7415
+      },
+      "b": {
+        "startLine": 6786,
+        "endLine": 7063
+      }
+    },
+    {
+      "id": "Graph:SOOrderEntry_ApprovalExt16",
+      "element": "Graph",
+      "key": "SOOrderEntry_ApprovalExt16",
+      "group": "code",
+      "name": "SOOrderEntry_ApprovalExt16",
+      "detail": "Graph extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 3824,
+        "endLine": 4118
+      },
+      "b": {
+        "startLine": 3705,
+        "endLine": 3999
+      }
+    },
+    {
+      "id": "Graph:SOOrderEntry_CarrierExt48",
+      "element": "Graph",
+      "key": "SOOrderEntry_CarrierExt48",
+      "group": "code",
+      "name": "SOOrderEntry_CarrierExt48",
+      "detail": "Graph extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 11662,
+        "endLine": 11840
+      },
+      "b": {
+        "startLine": 11436,
+        "endLine": 11614
+      }
+    },
+    {
+      "id": "Graph:SOOrderEntry_CarrierExt8",
+      "element": "Graph",
+      "key": "SOOrderEntry_CarrierExt8",
+      "group": "code",
+      "name": "SOOrderEntry_CarrierExt8",
+      "detail": "Graph extension",
+      "status": "modified",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 2065,
+        "endLine": 2174
+      },
+      "b": {
+        "startLine": 1946,
+        "endLine": 2055
+      }
+    },
+    {
+      "id": "Graph:SOOrderEntry_ContractExt17",
+      "element": "Graph",
+      "key": "SOOrderEntry_ContractExt17",
+      "group": "code",
+      "name": "SOOrderEntry_ContractExt17",
+      "detail": "New graph",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 4119,
+        "endLine": 4324
+      },
+      "b": {
+        "startLine": 4000,
+        "endLine": 4205
+      }
+    },
+    {
+      "id": "Graph:SOOrderEntry_CreditExt49",
+      "element": "Graph",
+      "key": "SOOrderEntry_CreditExt49",
+      "group": "code",
+      "name": "SOOrderEntry_CreditExt49",
+      "detail": "Graph extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 11841,
+        "endLine": 12214
+      },
+      "b": {
+        "startLine": 11615,
+        "endLine": 11988
+      }
+    },
+    {
+      "id": "Graph:SOOrderExt_AddedInB",
+      "element": "Graph",
+      "key": "SOOrderExt_AddedInB",
+      "group": "code",
+      "name": "SOOrderExt_AddedInB",
+      "detail": "New DAC",
+      "status": "only-b",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": null,
+      "b": {
+        "startLine": 9601,
+        "endLine": 9726
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\SOOrderWarranty1.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\SOOrderWarranty1.cs",
+      "group": "code",
+      "name": "SOOrderWarranty1.cs",
+      "detail": "App_Code\\Caches\\SOOrderWarranty1.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 12517,
+        "endLine": 12682
+      },
+      "b": {
+        "startLine": 12291,
+        "endLine": 12456
+      }
+    },
+    {
+      "id": "Graph:SOShipmentEntry_ContractExt7",
+      "element": "Graph",
+      "key": "SOShipmentEntry_ContractExt7",
+      "group": "code",
+      "name": "SOShipmentEntry_ContractExt7",
+      "detail": "Graph extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 1959,
+        "endLine": 2064
+      },
+      "b": {
+        "startLine": 1840,
+        "endLine": 1945
+      }
+    },
+    {
+      "id": "Graph:SOShipmentEntry_InventoryExt34",
+      "element": "Graph",
+      "key": "SOShipmentEntry_InventoryExt34",
+      "group": "code",
+      "name": "SOShipmentEntry_InventoryExt34",
+      "detail": "Graph extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 7995,
+        "endLine": 8192
+      },
+      "b": {
+        "startLine": 7643,
+        "endLine": 7840
+      }
+    },
+    {
+      "id": "Graph:SOShipmentEntry_RebateExt29",
+      "element": "Graph",
+      "key": "SOShipmentEntry_RebateExt29",
+      "group": "code",
+      "name": "SOShipmentEntry_RebateExt29",
+      "detail": "Graph extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 6734,
+        "endLine": 7019
+      },
+      "b": {
+        "startLine": 6382,
+        "endLine": 6667
+      }
+    },
+    {
+      "id": "Graph:SOShipmentExt_Approval47",
+      "element": "Graph",
+      "key": "SOShipmentExt_Approval47",
+      "group": "code",
+      "name": "SOShipmentExt_Approval47",
+      "detail": "DAC extension",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 11488,
+        "endLine": 11661
+      },
+      "b": {
+        "startLine": 11262,
+        "endLine": 11435
+      }
+    },
+    {
+      "id": "File:App_Code\\Caches\\SOShipmentOrder23.cs",
+      "element": "File",
+      "key": "App_Code\\Caches\\SOShipmentOrder23.cs",
+      "group": "code",
+      "name": "SOShipmentOrder23.cs",
+      "detail": "App_Code\\Caches\\SOShipmentOrder23.cs",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 17211,
+        "endLine": 17465
+      },
+      "b": {
+        "startLine": 16899,
+        "endLine": 17153
+      }
+    },
+    {
+      "id": "Page:~/pages/ap/ap246216.aspx",
+      "element": "Page",
+      "key": "~/pages/ap/ap246216.aspx",
+      "group": "screens",
+      "name": "AP246216",
+      "detail": "Commission Customer 14",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19006,
+        "endLine": 19016
+      },
+      "b": {
+        "startLine": 18682,
+        "endLine": 18692
+      }
+    },
+    {
+      "id": "Page:~/pages/ap/ap301001.aspx",
+      "element": "Page",
+      "key": "~/pages/ap/ap301001.aspx",
+      "group": "screens",
+      "name": "AP301001",
+      "detail": "Commission Contract 1",
+      "status": "modified",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 18893,
+        "endLine": 18902
+      },
+      "b": {
+        "startLine": 18581,
+        "endLine": 18590
+      }
+    },
+    {
+      "id": "Page:~/pages/ar/ar127300.aspx",
+      "element": "Page",
+      "key": "~/pages/ar/ar127300.aspx",
+      "group": "screens",
+      "name": "AR127300",
+      "detail": "Route Customer 4",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 18926,
+        "endLine": 18934
+      },
+      "b": {
+        "startLine": 18601,
+        "endLine": 18609
+      }
+    },
+    {
+      "id": "Page:~/pages/ar/ar139323.aspx",
+      "element": "Page",
+      "key": "~/pages/ar/ar139323.aspx",
+      "group": "screens",
+      "name": "AR139323",
+      "detail": "Carrier Region 18",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19041,
+        "endLine": 19053
+      },
+      "b": {
+        "startLine": 18717,
+        "endLine": 18729
+      }
+    },
+    {
+      "id": "Page:~/pages/ar/ar219213.aspx",
+      "element": "Page",
+      "key": "~/pages/ar/ar219213.aspx",
+      "group": "screens",
+      "name": "AR219213",
+      "detail": "Batch Shipment 2",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 18903,
+        "endLine": 18912
+      },
+      "b": {
+        "startLine": 18591,
+        "endLine": 18600
+      }
+    },
+    {
+      "id": "Page:~/pages/ar/ar301000.aspx",
+      "element": "Page",
+      "key": "~/pages/ar/ar301000.aspx",
+      "group": "screens",
+      "name": "AR301000",
+      "detail": "Warranty Order 0",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 18887,
+        "endLine": 18892
+      },
+      "b": {
+        "startLine": 18575,
+        "endLine": 18580
+      }
+    },
+    {
+      "id": "Page:~/pages/ar/ar376242.aspx",
+      "element": "Page",
+      "key": "~/pages/ar/ar376242.aspx",
+      "group": "screens",
+      "name": "AR376242",
+      "detail": "Route Shipment 3",
+      "status": "only-a",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 18913,
+        "endLine": 18925
+      },
+      "b": null
+    },
+    {
+      "id": "Page:~/pages/ar/ar385453.aspx",
+      "element": "Page",
+      "key": "~/pages/ar/ar385453.aspx",
+      "group": "screens",
+      "name": "AR385453",
+      "detail": "Lot Order 17",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19031,
+        "endLine": 19040
+      },
+      "b": {
+        "startLine": 18707,
+        "endLine": 18716
+      }
+    },
+    {
+      "id": "Page:~/pages/cr/cr254681.aspx",
+      "element": "Page",
+      "key": "~/pages/cr/cr254681.aspx",
+      "group": "screens",
+      "name": "CR254681",
+      "detail": "Customer Customer 5",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 18935,
+        "endLine": 18942
+      },
+      "b": {
+        "startLine": 18610,
+        "endLine": 18617
+      }
+    },
+    {
+      "id": "Page:~/pages/cr/cr278662.aspx",
+      "element": "Page",
+      "key": "~/pages/cr/cr278662.aspx",
+      "group": "screens",
+      "name": "CR278662",
+      "detail": "Freight Allocation 19",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19054,
+        "endLine": 19059
+      },
+      "b": {
+        "startLine": 18730,
+        "endLine": 18735
+      }
+    },
+    {
+      "id": "Page:~/pages/cr/cr289761.aspx",
+      "element": "Page",
+      "key": "~/pages/cr/cr289761.aspx",
+      "group": "screens",
+      "name": "CR289761",
+      "detail": "Contract Vendor 13",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19000,
+        "endLine": 19005
+      },
+      "b": {
+        "startLine": 18676,
+        "endLine": 18681
+      }
+    },
+    {
+      "id": "Page:~/pages/cr/cr312475.aspx",
+      "element": "Page",
+      "key": "~/pages/cr/cr312475.aspx",
+      "group": "screens",
+      "name": "CR312475",
+      "detail": "Rebate Approval 10",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 18978,
+        "endLine": 18983
+      },
+      "b": {
+        "startLine": 18654,
+        "endLine": 18659
+      }
+    },
+    {
+      "id": "Page:~/pages/in/in117784.aspx",
+      "element": "Page",
+      "key": "~/pages/in/in117784.aspx",
+      "group": "screens",
+      "name": "IN117784",
+      "detail": "Rebate Allocation 8",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 18967,
+        "endLine": 18971
+      },
+      "b": {
+        "startLine": 18643,
+        "endLine": 18647
+      }
+    },
+    {
+      "id": "Page:~/pages/in/in167874.aspx",
+      "element": "Page",
+      "key": "~/pages/in/in167874.aspx",
+      "group": "screens",
+      "name": "IN167874",
+      "detail": "Vendor Warranty 21",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19067,
+        "endLine": 19079
+      },
+      "b": {
+        "startLine": 18743,
+        "endLine": 18755
+      }
+    },
+    {
+      "id": "Page:~/pages/in/in391219.aspx",
+      "element": "Page",
+      "key": "~/pages/in/in391219.aspx",
+      "group": "screens",
+      "name": "IN391219",
+      "detail": "Route Approval 12",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 18990,
+        "endLine": 18999
+      },
+      "b": {
+        "startLine": 18666,
+        "endLine": 18675
+      }
+    },
+    {
+      "id": "Page:~/pages/pm/pm218773.aspx",
+      "element": "Page",
+      "key": "~/pages/pm/pm218773.aspx",
+      "group": "screens",
+      "name": "PM218773",
+      "detail": "Customer Freight 11",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 18984,
+        "endLine": 18989
+      },
+      "b": {
+        "startLine": 18660,
+        "endLine": 18665
+      }
+    },
+    {
+      "id": "Page:~/pages/pm/pm292132.aspx",
+      "element": "Page",
+      "key": "~/pages/pm/pm292132.aspx",
+      "group": "screens",
+      "name": "PM292132",
+      "detail": "Credit Rebate 6",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 18943,
+        "endLine": 18952
+      },
+      "b": {
+        "startLine": 18618,
+        "endLine": 18627
+      }
+    },
+    {
+      "id": "Page:~/pages/pm/pm293607.aspx",
+      "element": "Page",
+      "key": "~/pages/pm/pm293607.aspx",
+      "group": "screens",
+      "name": "PM293607",
+      "detail": "Lot Region 16",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19022,
+        "endLine": 19030
+      },
+      "b": {
+        "startLine": 18698,
+        "endLine": 18706
+      }
+    },
+    {
+      "id": "Page:~/pages/po/po378658.aspx",
+      "element": "Page",
+      "key": "~/pages/po/po378658.aspx",
+      "group": "screens",
+      "name": "PO378658",
+      "detail": "Contract Approval 9",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 18972,
+        "endLine": 18977
+      },
+      "b": {
+        "startLine": 18648,
+        "endLine": 18653
+      }
+    },
+    {
+      "id": "Page:~/pages/po/po401234.aspx",
+      "element": "Page",
+      "key": "~/pages/po/po401234.aspx",
+      "group": "screens",
+      "name": "PO401234",
+      "detail": "Lot Inventory 7",
+      "status": "modified",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 18953,
+        "endLine": 18966
+      },
+      "b": {
+        "startLine": 18628,
+        "endLine": 18642
+      }
+    },
+    {
+      "id": "Page:~/pages/so/so175531.aspx",
+      "element": "Page",
+      "key": "~/pages/so/so175531.aspx",
+      "group": "screens",
+      "name": "SO175531",
+      "detail": "Inventory Region 20",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19060,
+        "endLine": 19066
+      },
+      "b": {
+        "startLine": 18736,
+        "endLine": 18742
+      }
+    },
+    {
+      "id": "Page:~/pages/so/so194753.aspx",
+      "element": "Page",
+      "key": "~/pages/so/so194753.aspx",
+      "group": "screens",
+      "name": "SO194753",
+      "detail": "Credit Credit 15",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19017,
+        "endLine": 19021
+      },
+      "b": {
+        "startLine": 18693,
+        "endLine": 18697
+      }
+    },
+    {
+      "id": "Table:APInvoiceApproval10",
+      "element": "Table",
+      "key": "APInvoiceApproval10",
+      "group": "tables",
+      "name": "APInvoiceApproval10",
+      "detail": "13 columns",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19164,
+        "endLine": 19178
+      },
+      "b": {
+        "startLine": 18824,
+        "endLine": 18838
+      }
+    },
+    {
+      "id": "Table:BAccountAllocation12",
+      "element": "Table",
+      "key": "BAccountAllocation12",
+      "group": "tables",
+      "name": "BAccountAllocation12",
+      "detail": "5 columns",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19194,
+        "endLine": 19200
+      },
+      "b": {
+        "startLine": 18854,
+        "endLine": 18860
+      }
+    },
+    {
+      "id": "Table:BAccountMargin8",
+      "element": "Table",
+      "key": "BAccountMargin8",
+      "group": "tables",
+      "name": "BAccountMargin8",
+      "detail": "9 columns",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19143,
+        "endLine": 19153
+      },
+      "b": {
+        "startLine": 19565,
+        "endLine": 19575
+      }
+    },
+    {
+      "id": "Table:CRCaseAllocation4",
+      "element": "Table",
+      "key": "CRCaseAllocation4",
+      "group": "tables",
+      "name": "CRCaseAllocation4",
+      "detail": "4 columns",
+      "status": "only-a",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19112,
+        "endLine": 19117
+      },
+      "b": null
+    },
+    {
+      "id": "Table:CRCaseCustomer19",
+      "element": "Table",
+      "key": "CRCaseCustomer19",
+      "group": "tables",
+      "name": "CRCaseCustomer19",
+      "detail": "13 columns",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19255,
+        "endLine": 19269
+      },
+      "b": {
+        "startLine": 18914,
+        "endLine": 18928
+      }
+    },
+    {
+      "id": "Table:CRCaseInventory16",
+      "element": "Table",
+      "key": "CRCaseInventory16",
+      "group": "tables",
+      "name": "CRCaseInventory16",
+      "detail": "4 columns",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19234,
+        "endLine": 19239
+      },
+      "b": {
+        "startLine": 18893,
+        "endLine": 18898
+      }
+    },
+    {
+      "id": "Table:CRCaseRebate14",
+      "element": "Table",
+      "key": "CRCaseRebate14",
+      "group": "tables",
+      "name": "CRCaseRebate14",
+      "detail": "14 columns",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19208,
+        "endLine": 19223
+      },
+      "b": {
+        "startLine": 18867,
+        "endLine": 18882
+      }
+    },
+    {
+      "id": "Table:CRCaseVendor5",
+      "element": "Table",
+      "key": "CRCaseVendor5",
+      "group": "tables",
+      "name": "CRCaseVendor5",
+      "detail": "11 columns",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19118,
+        "endLine": 19130
+      },
+      "b": {
+        "startLine": 18788,
+        "endLine": 18800
+      }
+    },
+    {
+      "id": "Table:INTranBatch9",
+      "element": "Table",
+      "key": "INTranBatch9",
+      "group": "tables",
+      "name": "INTranBatch9",
+      "detail": "8 columns",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19154,
+        "endLine": 19163
+      },
+      "b": {
+        "startLine": 18814,
+        "endLine": 18823
+      }
+    },
+    {
+      "id": "Table:INTranOrder7",
+      "element": "Table",
+      "key": "INTranOrder7",
+      "group": "tables",
+      "name": "INTranOrder7",
+      "detail": "2 columns",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19139,
+        "endLine": 19142
+      },
+      "b": {
+        "startLine": 18810,
+        "endLine": 18813
+      }
+    },
+    {
+      "id": "Table:InventoryItemInventory6",
+      "element": "Table",
+      "key": "InventoryItemInventory6",
+      "group": "tables",
+      "name": "InventoryItemInventory6",
+      "detail": "6 columns",
+      "status": "modified",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19131,
+        "endLine": 19138
+      },
+      "b": {
+        "startLine": 18801,
+        "endLine": 18809
+      }
+    },
+    {
+      "id": "Table:PMTaskVendor11",
+      "element": "Table",
+      "key": "PMTaskVendor11",
+      "group": "tables",
+      "name": "PMTaskVendor11",
+      "detail": "13 columns",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19179,
+        "endLine": 19193
+      },
+      "b": {
+        "startLine": 18839,
+        "endLine": 18853
+      }
+    },
+    {
+      "id": "Table:POLineApproval18",
+      "element": "Table",
+      "key": "POLineApproval18",
+      "group": "tables",
+      "name": "POLineApproval18",
+      "detail": "6 columns",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19247,
+        "endLine": 19254
+      },
+      "b": {
+        "startLine": 18906,
+        "endLine": 18913
+      }
+    },
+    {
+      "id": "Table:POLineInventory2",
+      "element": "Table",
+      "key": "POLineInventory2",
+      "group": "tables",
+      "name": "POLineInventory2",
+      "detail": "9 columns",
+      "status": "whitespace",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19097,
+        "endLine": 19107
+      },
+      "b": {
+        "startLine": 18773,
+        "endLine": 18783
+      }
+    },
+    {
+      "id": "Table:SOLine",
+      "element": "Table",
+      "key": "SOLine",
+      "group": "tables",
+      "name": "SOLine",
+      "detail": "11 columns",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19080,
+        "endLine": 19092
+      },
+      "b": {
+        "startLine": 18756,
+        "endLine": 18768
+      }
+    },
+    {
+      "id": "Table:SOLine#2",
+      "element": "Table",
+      "key": "SOLine",
+      "group": "tables",
+      "name": "SOLine",
+      "detail": "5 columns",
+      "status": "modified",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19201,
+        "endLine": 19207
+      },
+      "b": {
+        "startLine": 18861,
+        "endLine": 18866
+      }
+    },
+    {
+      "id": "Table:SOLineCarrier3",
+      "element": "Table",
+      "key": "SOLineCarrier3",
+      "group": "tables",
+      "name": "SOLineCarrier3",
+      "detail": "2 columns",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19108,
+        "endLine": 19111
+      },
+      "b": {
+        "startLine": 18784,
+        "endLine": 18787
+      }
+    },
+    {
+      "id": "Table:SOLineRoute17",
+      "element": "Table",
+      "key": "SOLineRoute17",
+      "group": "tables",
+      "name": "SOLineRoute17",
+      "detail": "5 columns",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19240,
+        "endLine": 19246
+      },
+      "b": {
+        "startLine": 18899,
+        "endLine": 18905
+      }
+    },
+    {
+      "id": "Table:SOOrderMargin1",
+      "element": "Table",
+      "key": "SOOrderMargin1",
+      "group": "tables",
+      "name": "SOOrderMargin1",
+      "detail": "2 columns",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19093,
+        "endLine": 19096
+      },
+      "b": {
+        "startLine": 18769,
+        "endLine": 18772
+      }
+    },
+    {
+      "id": "Table:SOShipmentWarranty15",
+      "element": "Table",
+      "key": "SOShipmentWarranty15",
+      "group": "tables",
+      "name": "SOShipmentWarranty15",
+      "detail": "8 columns",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19224,
+        "endLine": 19233
+      },
+      "b": {
+        "startLine": 18883,
+        "endLine": 18892
+      }
+    },
+    {
+      "id": "Sql:UsrCommissionHistory5",
+      "element": "Sql",
+      "key": "UsrCommissionHistory5",
+      "group": "sql",
+      "name": "UsrCommissionHistory5",
+      "detail": null,
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 19395,
+        "endLine": 19415
+      },
+      "b": {
+        "startLine": 19055,
+        "endLine": 19075
+      }
+    },
+    {
+      "id": "Sql:UsrCreditHistory2",
+      "element": "Sql",
+      "key": "UsrCreditHistory2",
+      "group": "sql",
+      "name": "UsrCreditHistory2",
+      "detail": null,
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 19319,
+        "endLine": 19343
+      },
+      "b": {
+        "startLine": 18979,
+        "endLine": 19003
+      }
+    },
+    {
+      "id": "Sql:UsrFreightHistory1",
+      "element": "Sql",
+      "key": "UsrFreightHistory1",
+      "group": "sql",
+      "name": "UsrFreightHistory1",
+      "detail": null,
+      "status": "modified",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 19289,
+        "endLine": 19318
+      },
+      "b": {
+        "startLine": 18948,
+        "endLine": 18978
+      }
+    },
+    {
+      "id": "Sql:UsrLotHistory6",
+      "element": "Sql",
+      "key": "UsrLotHistory6",
+      "group": "sql",
+      "name": "UsrLotHistory6",
+      "detail": null,
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 19416,
+        "endLine": 19441
+      },
+      "b": {
+        "startLine": 19076,
+        "endLine": 19101
+      }
+    },
+    {
+      "id": "Sql:UsrRegionHistory3",
+      "element": "Sql",
+      "key": "UsrRegionHistory3",
+      "group": "sql",
+      "name": "UsrRegionHistory3",
+      "detail": null,
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 19344,
+        "endLine": 19363
+      },
+      "b": {
+        "startLine": 19004,
+        "endLine": 19023
+      }
+    },
+    {
+      "id": "Sql:UsrRouteAudit",
+      "element": "Sql",
+      "key": "UsrRouteAudit",
+      "group": "sql",
+      "name": "UsrRouteAudit",
+      "detail": null,
+      "status": "only-b",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": null,
+      "b": {
+        "startLine": 19349,
+        "endLine": 19367
+      }
+    },
+    {
+      "id": "Sql:UsrWarrantyHistory0",
+      "element": "Sql",
+      "key": "UsrWarrantyHistory0",
+      "group": "sql",
+      "name": "UsrWarrantyHistory0",
+      "detail": null,
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 19270,
+        "endLine": 19288
+      },
+      "b": {
+        "startLine": 18929,
+        "endLine": 18947
+      }
+    },
+    {
+      "id": "Sql:UsrWarrantyHistory4",
+      "element": "Sql",
+      "key": "UsrWarrantyHistory4",
+      "group": "sql",
+      "name": "UsrWarrantyHistory4",
+      "detail": null,
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 19364,
+        "endLine": 19394
+      },
+      "b": {
+        "startLine": 19024,
+        "endLine": 19054
+      }
+    },
+    {
+      "id": "Report:SO641000.rpx",
+      "element": "Report",
+      "key": "SO641000.rpx",
+      "group": "reports",
+      "name": "SO641000.rpx",
+      "detail": null,
+      "status": "modified",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 19442,
+        "endLine": 19479
+      },
+      "b": {
+        "startLine": 19102,
+        "endLine": 19139
+      }
+    },
+    {
+      "id": "Report:SO641010.rpx",
+      "element": "Report",
+      "key": "SO641010.rpx",
+      "group": "reports",
+      "name": "SO641010.rpx",
+      "detail": null,
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 19480,
+        "endLine": 19523
+      },
+      "b": {
+        "startLine": 19140,
+        "endLine": 19183
+      }
+    },
+    {
+      "id": "Report:SO641020.rpx",
+      "element": "Report",
+      "key": "SO641020.rpx",
+      "group": "reports",
+      "name": "SO641020.rpx",
+      "detail": null,
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 19524,
+        "endLine": 19563
+      },
+      "b": {
+        "startLine": 19184,
+        "endLine": 19223
+      }
+    },
+    {
+      "id": "Report:SO641030.rpx",
+      "element": "Report",
+      "key": "SO641030.rpx",
+      "group": "reports",
+      "name": "SO641030.rpx",
+      "detail": null,
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 19564,
+        "endLine": 19613
+      },
+      "b": {
+        "startLine": 19224,
+        "endLine": 19273
+      }
+    },
+    {
+      "id": "GenericInquiryScreen:CT-MarginBackorder4",
+      "element": "GenericInquiryScreen",
+      "key": "CT-MarginBackorder4",
+      "group": "inquiries",
+      "name": "CT-MarginBackorder4",
+      "detail": null,
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19826,
+        "endLine": 19853
+      },
+      "b": {
+        "startLine": 19509,
+        "endLine": 19536
+      }
+    },
+    {
+      "id": "GenericInquiryScreen:CT-RegionCarrier2",
+      "element": "GenericInquiryScreen",
+      "key": "CT-RegionCarrier2",
+      "group": "inquiries",
+      "name": "CT-RegionCarrier2",
+      "detail": null,
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19769,
+        "endLine": 19794
+      },
+      "b": {
+        "startLine": 19452,
+        "endLine": 19477
+      }
+    },
+    {
+      "id": "GenericInquiryScreen:CT-RegionMargin0",
+      "element": "GenericInquiryScreen",
+      "key": "CT-RegionMargin0",
+      "group": "inquiries",
+      "name": "CT-RegionMargin0",
+      "detail": null,
+      "status": "modified",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19719,
+        "endLine": 19743
+      },
+      "b": {
+        "startLine": 19401,
+        "endLine": 19426
+      }
+    },
+    {
+      "id": "GenericInquiryScreen:CT-VendorLot3",
+      "element": "GenericInquiryScreen",
+      "key": "CT-VendorLot3",
+      "group": "inquiries",
+      "name": "CT-VendorLot3",
+      "detail": null,
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19795,
+        "endLine": 19825
+      },
+      "b": {
+        "startLine": 19478,
+        "endLine": 19508
+      }
+    },
+    {
+      "id": "GenericInquiryScreen:CT-WarrantyRoute1",
+      "element": "GenericInquiryScreen",
+      "key": "CT-WarrantyRoute1",
+      "group": "inquiries",
+      "name": "CT-WarrantyRoute1",
+      "detail": null,
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19744,
+        "endLine": 19768
+      },
+      "b": {
+        "startLine": 19427,
+        "endLine": 19451
+      }
+    },
+    {
+      "id": "SiteMapNode:AR378094",
+      "element": "SiteMapNode",
+      "key": "AR378094",
+      "group": "sitemap",
+      "name": "AR378094",
+      "detail": null,
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19704,
+        "endLine": 19718
+      },
+      "b": {
+        "startLine": 19386,
+        "endLine": 19400
+      }
+    },
+    {
+      "id": "SiteMapNode:CR233666",
+      "element": "SiteMapNode",
+      "key": "CR233666",
+      "group": "sitemap",
+      "name": "CR233666",
+      "detail": null,
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19659,
+        "endLine": 19673
+      },
+      "b": {
+        "startLine": 19304,
+        "endLine": 19318
+      }
+    },
+    {
+      "id": "SiteMapNode:IN392941",
+      "element": "SiteMapNode",
+      "key": "IN392941",
+      "group": "sitemap",
+      "name": "IN392941",
+      "detail": null,
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19689,
+        "endLine": 19703
+      },
+      "b": {
+        "startLine": 19334,
+        "endLine": 19348
+      }
+    },
+    {
+      "id": "SiteMapNode:PM208586",
+      "element": "SiteMapNode",
+      "key": "PM208586",
+      "group": "sitemap",
+      "name": "PM208586",
+      "detail": null,
+      "status": "modified",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19644,
+        "endLine": 19658
+      },
+      "b": {
+        "startLine": 19289,
+        "endLine": 19303
+      }
+    },
+    {
+      "id": "SiteMapNode:PM418226",
+      "element": "SiteMapNode",
+      "key": "PM418226",
+      "group": "sitemap",
+      "name": "PM418226",
+      "detail": null,
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19614,
+        "endLine": 19628
+      },
+      "b": {
+        "startLine": 19274,
+        "endLine": 19288
+      }
+    },
+    {
+      "id": "SiteMapNode:SO181134",
+      "element": "SiteMapNode",
+      "key": "SO181134",
+      "group": "sitemap",
+      "name": "SO181134",
+      "detail": null,
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19674,
+        "endLine": 19688
+      },
+      "b": {
+        "startLine": 19319,
+        "endLine": 19333
+      }
+    },
+    {
+      "id": "SiteMapNode:SO254994",
+      "element": "SiteMapNode",
+      "key": "SO254994",
+      "group": "sitemap",
+      "name": "SO254994",
+      "detail": null,
+      "status": "only-a",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19629,
+        "endLine": 19643
+      },
+      "b": null
+    },
+    {
+      "id": "SiteMapNode:SO509999",
+      "element": "SiteMapNode",
+      "key": "SO509999",
+      "group": "sitemap",
+      "name": "SO509999",
+      "detail": null,
+      "status": "only-b",
+      "views": [
+        "xml"
+      ],
+      "a": null,
+      "b": {
+        "startLine": 19368,
+        "endLine": 19382
+      }
+    },
+    {
+      "id": "EntityEndpoint:ContosoEndpoint1",
+      "element": "EntityEndpoint",
+      "key": "ContosoEndpoint1",
+      "group": "integration",
+      "name": "ContosoEndpoint1",
+      "detail": null,
+      "status": "modified",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19854,
+        "endLine": 19865
+      },
+      "b": {
+        "startLine": 19537,
+        "endLine": 19547
+      }
+    },
+    {
+      "id": "EntityEndpoint:ContosoEndpoint2",
+      "element": "EntityEndpoint",
+      "key": "ContosoEndpoint2",
+      "group": "integration",
+      "name": "ContosoEndpoint2",
+      "detail": null,
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19866,
+        "endLine": 19879
+      },
+      "b": {
+        "startLine": 19548,
+        "endLine": 19561
+      }
+    },
+    {
+      "id": "File:Scripts\\contoso-grid.js",
+      "element": "File",
+      "key": "Scripts\\contoso-grid.js",
+      "group": "files",
+      "name": "contoso-grid.js",
+      "detail": "Scripts\\contoso-grid.js",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 18875,
+        "endLine": 18881
+      },
+      "b": {
+        "startLine": 18563,
+        "endLine": 18569
+      }
+    },
+    {
+      "id": "File:Docs\\README.txt",
+      "element": "File",
+      "key": "Docs\\README.txt",
+      "group": "files",
+      "name": "README.txt",
+      "detail": "Docs\\README.txt",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 18882,
+        "endLine": 18886
+      },
+      "b": {
+        "startLine": 18570,
+        "endLine": 18574
+      }
+    },
+    {
+      "id": "File:Pages\\SO\\SO301000Ext.aspx",
+      "element": "File",
+      "key": "Pages\\SO\\SO301000Ext.aspx",
+      "group": "files",
+      "name": "SO301000Ext.aspx",
+      "detail": "Pages\\SO\\SO301000Ext.aspx",
+      "status": "modified",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 18860,
+        "endLine": 18866
+      },
+      "b": {
+        "startLine": 18548,
+        "endLine": 18554
+      }
+    },
+    {
+      "id": "File:Web.config.transform",
+      "element": "File",
+      "key": "Web.config.transform",
+      "group": "files",
+      "name": "Web.config.transform",
+      "detail": "Web.config.transform",
+      "status": "same",
+      "views": [
+        "code",
+        "xml"
+      ],
+      "a": {
+        "startLine": 18867,
+        "endLine": 18874
+      },
+      "b": {
+        "startLine": 18555,
+        "endLine": 18562
+      }
+    },
+    {
+      "id": "MobileSiteMapNode:AP157973",
+      "element": "MobileSiteMapNode",
+      "key": "AP157973",
+      "group": "other",
+      "name": "AP157973",
+      "detail": "MobileSiteMapNode",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19880,
+        "endLine": 19882
+      },
+      "b": {
+        "startLine": 19562,
+        "endLine": 19564
+      }
+    },
+    {
+      "id": "Locale:fr-FR",
+      "element": "Locale",
+      "key": "fr-FR",
+      "group": "other",
+      "name": "fr-FR",
+      "detail": "Locale",
+      "status": "only-b",
+      "views": [
+        "xml"
+      ],
+      "a": null,
+      "b": {
+        "startLine": 19383,
+        "endLine": 19385
+      }
+    },
+    {
+      "id": "MobileSiteMapNode:PO456494",
+      "element": "MobileSiteMapNode",
+      "key": "PO456494",
+      "group": "other",
+      "name": "PO456494",
+      "detail": "MobileSiteMapNode",
+      "status": "only-a",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19883,
+        "endLine": 19885
+      },
+      "b": null
+    }
+  ],
+  "notes": "Expected items follow docs/INTERFACES.md \"Project explorer\": id = `${element}:${identity}` (#2 for duplicates in document order), group from the classification table, status from the default view (CDATA bodies when present, else the element lines). `detail` null = unspecified by the contract. EntityEndpoint identity is its Name attribute; the app may also show Version. Items are sorted by group order, then name. Line ranges are 1-based inclusive."
+}

@@ -14,6 +14,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FIXTURE_SPECS, generatePair } from './lib/fixture-gen.ts';
 import type { ExpectedStats, GeneratedPair } from './lib/fixture-gen.ts';
+import { generateProjectPair, PROJECT_SEED } from './lib/project-gen.ts';
 import { monacoDiffStats, withinTolerance } from './lib/diff-stats.ts';
 import type { CountedStats, Tolerance } from './lib/diff-stats.ts';
 
@@ -96,10 +97,49 @@ async function main(): Promise<void> {
         `trim ${JSON.stringify(expected.trimWhitespace)} | gen ${genMs} ms` + (diffMs === null ? '' : `, verify ${diffMs} ms`),
     );
   }
+  if (!only || only.includes('project')) writeProject();
   if (failed) {
     console.error('gen-fixtures: monaco stats disagree with the constructed edits beyond tolerance');
     process.exit(1);
   }
+}
+
+/** The Acumatica project pair for the explorer: project-a.xml, project-b.xml, project.changes.json. */
+function writeProject(): void {
+  const t0 = performance.now();
+  const p = generateProjectPair();
+  writeFileSync(join(OUT, 'project-a.xml'), p.a);
+  writeFileSync(join(OUT, 'project-b.xml'), p.b);
+  const side = (file: string, text: string, root: Record<string, string>): Record<string, unknown> => ({
+    file,
+    lines: lineCount(text),
+    bytes: Buffer.byteLength(text),
+    sha256: sha256(text),
+    root,
+  });
+  const sidecar = {
+    fixture: 'project',
+    kind: 'project',
+    seed: PROJECT_SEED,
+    generator: 'scripts/gen-fixtures.ts (scripts/lib/project-gen.ts)',
+    a: side('project-a.xml', p.a, p.root.a),
+    b: side('project-b.xml', p.b, p.root.b),
+    counts: p.counts,
+    cdataSplit: p.cdataSplit,
+    edits: p.edits,
+    items: p.items,
+    notes:
+      'Expected items follow docs/INTERFACES.md "Project explorer": id = `${element}:${identity}` (#2 for duplicates in document order), ' +
+      'group from the classification table, status from the default view (CDATA bodies when present, else the element lines). ' +
+      '`detail` null = unspecified by the contract. EntityEndpoint identity is its Name attribute; the app may also show Version. ' +
+      'Items are sorted by group order, then name. Line ranges are 1-based inclusive.',
+  };
+  writeFileSync(join(OUT, 'project.changes.json'), JSON.stringify(sidecar, null, 2) + '\n');
+  const s = p.counts.byStatus;
+  console.log(
+    `project       A ${lineCount(p.a)} lines ${(Buffer.byteLength(p.a) / 1024 / 1024).toFixed(2)} MB | B ${lineCount(p.b)} lines | ` +
+      `${p.counts.total} items: same ${s.same}, modified ${s.modified}, whitespace ${s.whitespace}, only-a ${s['only-a']}, only-b ${s['only-b']} | ${Math.round(performance.now() - t0)} ms`,
+  );
 }
 
 await main();

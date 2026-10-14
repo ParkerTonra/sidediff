@@ -632,3 +632,17 @@ export function generatePair(spec: FixtureSpec): GeneratedPair {
     constructed,
   };
 }
+
+// ---------------------------------------------------------------- shared with project-gen.ts
+
+/** One C# compilation unit (usings, namespace, one extension class) of about `target` lines. */
+export function csharpUnit(seed: number, target: number): string[] {
+  const b = newBuilder();
+  emitCSharpUnit(b, { rng: createRng(seed), counter: 0 }, target, true, false);
+  return b.lines;
+}
+
+/** Applies one single-line edit of `kind`; null when the line can't take it. */
+export function mutateLine(kind: EditKind, line: string, isXml: boolean, rng: Rng): string | null {
+  return editLine(kind, line, isXml, rng);
+}
