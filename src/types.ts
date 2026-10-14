@@ -171,9 +171,12 @@ export type ProjectGroup =
  */
 export type ItemStatus = 'same' | 'whitespace' | 'modified' | 'only-a' | 'only-b';
 
-/** One way to look at an item: its code (CDATA body) or its raw XML element. */
+/**
+ * One way to look at an item: its code (CDATA body or decoded page source),
+ * its customization delta (a Page's child elements), or its raw XML element.
+ */
 export interface ItemViewKind {
-  id: 'code' | 'xml';
+  id: 'code' | 'changes' | 'xml';
   label: string;
   language: LanguageId;
 }
