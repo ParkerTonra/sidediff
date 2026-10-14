@@ -175,6 +175,7 @@ async function main(): Promise<void> {
   check('side-by-side stays side-by-side at 700 px', narrowSbs);
   await page.setViewportSize({ width: 1600, height: 900 });
 
+
   // --- find, folding, theme, font ------------------------------------------
   await page.evaluate(() => window.__engine!.find('b'));
   await page.waitForTimeout(300);
@@ -220,7 +221,7 @@ async function main(): Promise<void> {
   for (const [mode, side] of [['side-by-side', 'a'], ['side-by-side', 'b'], ['inline', 'b']] as const) {
     await page.evaluate((m) => window.__engine!.setOptions({ viewMode: m }), mode);
     await page.waitForTimeout(150);
-    const textBefore = await page.evaluate(() => window.__engine!.getText('a') + ' ' + window.__engine!.getText('b'));
+    const textBefore = await page.evaluate(() => window.__engine!.getText('a') + '\u0000' + window.__engine!.getText('b'));
     await page.evaluate((s) => window.__engine!.focus(s), side);
     await page.keyboard.press('Control+m');
     await page.keyboard.press(side === 'a' ? 'Shift+Tab' : 'Tab');
@@ -230,7 +231,7 @@ async function main(): Promise<void> {
     const back = await focusAt();
     await page.evaluate((s) => window.__engine!.focus(s), side);
     await page.keyboard.press('Control+m'); // tab focus mode off again
-    const textAfter = await page.evaluate(() => window.__engine!.getText('a') + ' ' + window.__engine!.getText('b'));
+    const textAfter = await page.evaluate(() => window.__engine!.getText('a') + '\u0000' + window.__engine!.getText('b'));
     focusTrail.push(`${mode}/${side}: tab→${out} shift-tab→${back}${textBefore === textAfter ? '' : ' TEXT CHANGED'}`);
   }
   await page.evaluate(() => window.__engine!.setOptions({ viewMode: 'side-by-side' }));
@@ -330,6 +331,37 @@ async function main(): Promise<void> {
     'diff:start on option changes; degraded enters and leaves with null',
     ev === 'start done | start done | start done | start done | degraded:a start done | degraded:null start done',
     ev,
+  );
+
+  // Word wrap survives a trip through inline (Monaco left A's wordWrapOverride2 'off').
+  const wrapWidths = async (): Promise<number[]> =>
+    page.evaluate(() =>
+      ['.original-in-monaco-diff-editor', '.modified-in-monaco-diff-editor'].map((sel) => {
+        const v = document.querySelector<HTMLElement>(`${sel} .view-lines`);
+        const ed = document.querySelector<HTMLElement>(sel);
+        return v && ed ? Math.round(v.scrollWidth / ed.getBoundingClientRect().width * 100) / 100 : -1;
+      }),
+    );
+  await untilDiff(
+    page,
+    "const l = (c) => Array.from({ length: 60 }, (_, i) => c.repeat(3000) + i).join('\\n'); e.setText('a', l('x')); e.setText('b', l('x').replace('x0', 'y0'));",
+  );
+  await page.evaluate(() => window.__engine!.setOptions({ wordWrap: true }));
+  await page.waitForTimeout(300);
+  const wrapBefore = await wrapWidths();
+  await page.evaluate(() => window.__engine!.setOptions({ viewMode: 'inline' }));
+  await page.waitForTimeout(300);
+  await page.evaluate(() => window.__engine!.setOptions({ viewMode: 'side-by-side' }));
+  await page.waitForTimeout(300);
+  const wrapAfter = await wrapWidths();
+  await page.evaluate(() => window.__engine!.setOptions({ wordWrap: false }));
+  await page.waitForTimeout(300);
+  const unwrapped = await wrapWidths();
+  // Ratio of content width to pane width: <= ~1 when wrapped, well above 1 with the 600-char lines unwrapped.
+  check(
+    'word wrap on A survives inline → side-by-side',
+    wrapBefore.every((r) => r > 0 && r <= 1.05) && wrapAfter.every((r) => r > 0 && r <= 1.05) && unwrapped.every((r) => r > 1.5),
+    `wrapped ${JSON.stringify(wrapBefore)} → after inline trip ${JSON.stringify(wrapAfter)}; wrap off ${JSON.stringify(unwrapped)}`,
   );
 
   check('no console errors', errors.length === 0, errors.slice(0, 5).join(' | '));

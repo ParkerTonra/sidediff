@@ -174,7 +174,14 @@ export function createDiffEngine(): DiffEngine {
     const sub = { minimap: mapped.minimap, folding: mapped.folding };
     // Inline mode hides the original editor but leaves it focusable; keep it
     // out of the tab order so keyboard focus never lands in an invisible pane.
-    diffEditor.getOriginalEditor().updateOptions({ ...sub, tabIndex: mapped.renderSideBySide ? 0 : -1 });
+    // Monaco sets wordWrapOverride2 'off' on the hidden original editor in
+    // inline mode and never resets it, so A stayed unwrapped after inline →
+    // side-by-side. Reset it here.
+    diffEditor.getOriginalEditor().updateOptions({
+      ...sub,
+      tabIndex: mapped.renderSideBySide ? 0 : -1,
+      ...(mapped.renderSideBySide ? { wordWrapOverride2: 'inherit' as const } : {}),
+    });
     diffEditor.getModifiedEditor().updateOptions(sub);
   }
 
