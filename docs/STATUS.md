@@ -49,6 +49,28 @@ Each agent keeps its own section current: **Doing**, **Done** (with what was mea
   - Browser proof (Chromium, harness `src/languages/harness/index.html` on port 5320, same CSP as index.html plus `'wasm-unsafe-eval'`): `install('sql')` downloaded from jsDelivr, verified, highlighted in a Monaco editor (keywords/strings/numbers/comments coloured in vs-dark); reload → 0 jsDelivr requests, loaded from IndexedDB; JSON pack also highlighted; no console errors. `nowasm.html` (today's index.html CSP) → `install` returns "Could not start the grammar engine (WebAssembly blocked…)".
   - Bundle: vscode-textmate is a lazy 25 KB gz chunk and onig.wasm a 162 KB gz asset, both fetched only when a remote pack activates.
 - Not done / for others: real-app install needs the CSP Request below. Not verified through the UI's Add-language dialog against the real app yet (UI renders it; testids `btn-install-<id>`). Single-file build path for the WASM (`data:` URL decode) is written but untested until that build exists.
+- **Phase 4: project indexer** (10d2577), `createProjectIndexer({ createWorker?, languageAvailable? })` in `src/project/index.ts`, built to the e0d55ac contract (async `viewText`, real-export rows).
+  - `scan.ts`: a linear, `indexOf`-driven scanner (no DOMParser). It reads the direct children of `<Customization>`: start-tag attributes (entities decoded), 1-based line ranges, `<CDATA name>` bodies with `]]>` splits joined, bare CDATA directly in the item, captured `<Field>`s with their CDATA, the first matching `<row>`, the child count and `<Column>`/`<Field>` counts. Malformed or truncated input sets `error: "… (line N)"` and keeps the items found so far. A test cuts a project at every offset and none throws.
+  - `classify.ts`: one data-table row per element from INTERFACES.md. `build.ts` handles matching by id, `#n` duplicates, sort order and status of the default view.
+    - Page: equal `pageSource` base64 → `same` without decoding. Otherwise both sides are inflated (raw-deflate) in the worker and compared; if decoding fails → `modified`.
+    - EditorUpdatedFields: the JSON is compared raw first, then pretty-printed.
+  - `index.ts`: the worker runs via `new Worker(new URL('./project.worker.ts', import.meta.url))` and builds as its own 13.8 KB chunk. A newer call terminates the worker and respawns it; the old promise rejects with `AbortError`.
+    - Non-project text resolves without a worker. A non-project side is sent as `''`.
+    - `viewText` slices the kept texts, inflates `pageSource` with `DecompressionStream('deflate-raw')`, pretty-prints JSON, and keeps an 8-entry LRU.
+  - Tests: 60 in `src/project/project.test.ts`: every table row incl. Graph FileTypes/DAC fields/Page ASPX·HTML·Changes·Modern UI/File screenId and content-less Files/PerTenantFile/EditorUpdatedFields JSON/Sql Schema/SiteMapNode and GI rows/integration +Version; unknown → other; `#2`; split CDATA; malformed and truncated; non-project; moved = same; whitespace; supersede/abort, crash respawn, dispose. Full vitest run: 184 passed. Lint clean.
+  - Perf, measured in Chromium (harness `src/project/harness.html`, 5 runs each, real worker):
+
+    | Pair | Scan per side, in worker | Main thread per `index()` | Round trip | Long tasks (> 50 ms) |
+    |---|---|---|---|---|
+    | `large` (150k lines, 9.2 MB) | 8–19 ms (target < 500) | 3 ms (target < 50) | 44–79 ms | none |
+    | `stress` (500k lines, 30 MB) | 36–49 ms | 10 ms | 165–185 ms | none |
+
+    In node, `buildIndex` takes 57 ms for the whole large pair. `pageSource` decode through `viewText` was checked in the browser and is byte-identical.
+  - **For the Lead:**
+    1. Wire `languageAvailable: (id) => registry.get(id)?.installed === true` in `main.ts`; otherwise JSON views fall back to plaintext.
+    2. `ItemViewKind.id` is only `'code' | 'xml'`, so a Page's "changes" view is the `xml` view labelled **Changes** whenever the Page has child elements. A separate third view would need a type change.
+    3. DAC `<Field>` attribute names are a guess: `FieldName`, `TypeName`, `StorageName` (falling back to `Name`/`Type`), with CDATA `TextAttributes`. Check them against the real export.
+  - **For QA:** the `large` fixture reuses identities: 294 Graphs share 10 ClassNames and 495 Tables share 12 TableNames. Inserting, deleting or moving one shifts the `#n` numbering, so `large` shows 31 only-a + 31 only-b and more `modified` than real projects would (counts: same 937, whitespace 49, modified 825). The `project` fixture should use unique identities, as real exports do.
 
 ## QA / Performance (`scripts/`, `fixtures/`, `tests/`)
 - **PROJECT FIXTURE READY** (09c484e, Phase 4): `pnpm fixtures --only project` (≈50 ms) writes `fixtures/project-a.xml` / `-b.xml` (19,887 / 19,577 lines, both well-formed per Chromium DOMParser). `fixtures/project.changes.json` lists all 157 expected items (id, element, key, group, name, detail, status, views, 1-based line ranges) and counts: same 123, modified 20, whitespace 4, only-a 6, only-b 4; groups code 80, screens 22, tables 20, sql 8, reports 4, inquiries 5, sitemap 8, integration 2, files 4, other 3 (MobileSiteMapNode ×2, Locale). Includes all four Graph FileTypes, .cs and non-.cs Files, a Page with CDATA `pageSource`, duplicate `Table:SOLine` / `Table:SOLine#2` (only #2 modified), two moved items (status same), CDATA split `]]]]><![CDATA[>` in `cdataSplit.id` (joined code must contain `cdataSplit.mustContain`) and in one Sql, product-version 24.200.0001 → 25.100.0119. `detail: null` = not specified by the contract. Assumption to confirm (Languages): EntityEndpoint identity = its `Name` attribute, id `EntityEndpoint:ContosoEndpoint1` (the contract says "Name (+ Version)").
