@@ -187,7 +187,7 @@ Verified against a real export (2026-10-14, user-supplied, 233 KB / 3,192 lines;
 | `Report`, `ReportDefinition` | reports | `ReportName`, `Name` | | code: its CDATA (xml); xml |
 | `SiteMapNode` | sitemap | first `<row>` descendant with `ScreenID` | ScreenID = screenId; detail = that row's `Title` | xml |
 | `GenericInquiryScreen`, `GIDesign`, `DashboardMaintenance` | inquiries | first `<row>` descendant with `Name` or `DesignID` | | xml |
-| `EntityEndpoint`, `XportScenario`, `ImportScenario`, `WebHook`, `BusinessEvent` | integration | `Name` (+ `Version`) | | xml |
+| `EntityEndpoint`, `XportScenario`, `ImportScenario`, `WebHook`, `BusinessEvent` | integration | `Name`; id is `EntityEndpoint:<Name>@<Version>` when `Version` is present (one name can exist in several versions), else `EntityEndpoint:<Name>`. Other integration elements: `<Element>:<Name>` | | xml |
 | anything else | other | generic list above | `<Element> identity` | xml (its CDATA as code view if any) |
 
 - `views`: `code` comes first when the element has CDATA (one section → its body; several → bodies joined with a `// ---- <name> ----` separator line), then `xml` (the element's own lines, verbatim). No CDATA → `xml` only.
