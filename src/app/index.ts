@@ -1,5 +1,6 @@
 // App shell: toolbar, pane headers, stats bar, dialogs, shortcuts. Owned by UI / UX.
-// Talks only to DiffEngine and LanguageRegistry; never imports Monaco.
+// Talks only to DiffEngine, LanguageRegistry and the optional project explorer
+// deps (ProjectIndexer, ItemViewApi, TextHistoryApi); never imports Monaco.
 import '../styles/app.css';
 import {
   CONTEXT_LINES_MAX,
@@ -10,15 +11,24 @@ import {
   type DegradedInfo,
   type DiffOptions,
   type DiffStats,
+  type ItemViewKind,
   type LanguageId,
+  type ProjectIndex,
+  type ProjectItem,
+  type ReplaceReason,
   type Side,
   type ThemeId,
+  DEFAULT_EXPLORER,
 } from '../types';
 import { FONT_SIZE_MAX, FONT_SIZE_MIN, LABEL_MAX_LENGTH, clamp, createSettingsStore } from '../persist/settings';
 import { fmt, h, isTextTarget } from './dom';
+import { GROUP_LABELS, changedCount, createExplorer, glyph, statusWord } from './explorer';
+import { fuzzyItem } from './fuzzy';
 
 const SIDES: readonly Side[] = ['a', 'b'];
 const DETECT_SAMPLE = 8 * 1024;
+const REINDEX_DELAY_MS = 400;
+const QUICK_OPEN_LIMIT = 60;
 const SHORTCUTS: ReadonlyArray<[string, string]> = [
   ['F7 / Alt+↓', 'Next change'],
   ['Shift+F7 / Alt+↑', 'Previous change'],
@@ -26,6 +36,11 @@ const SHORTCUTS: ReadonlyArray<[string, string]> = [
   ['Ctrl+F', 'Find in the focused pane'],
   ['?', 'Show this cheat sheet'],
   ['Ctrl+M', 'Toggle Tab focus mode (Tab moves focus out of the editor)'],
+  ['Ctrl+Z / Ctrl+Y', 'Undo / redo a paste, clear, file load or swap (outside the editor, or when its own undo is empty)'],
+  ['Ctrl+B', 'Show or hide the project explorer'],
+  ['Ctrl+P', 'Quick open a project item'],
+  ['Alt+← / Esc', 'Back from an item to the whole project'],
+  ['Alt+PgUp / Alt+PgDn', 'Previous / next item'],
   ['Esc', 'Close dialogs'],
 ];
 
@@ -47,11 +62,12 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-async function startApp({ root, engine, registry }: AppDeps): Promise<void> {
+async function startApp({ root, engine, registry, project, views, history }: AppDeps): Promise<void> {
   // 1. Settings first, and the theme before anything paints.
   const store = createSettingsStore();
   const settings: AppSettings = store.load();
   const save = (): void => store.save(settings);
+  const explorerSettings = (settings.explorer ??= { ...DEFAULT_EXPLORER });
   applyThemeAttr(settings.theme);
 
   let ready = false;
@@ -64,10 +80,10 @@ async function startApp({ root, engine, registry }: AppDeps): Promise<void> {
   const btnPrev = h('button', { type: 'button', class: 'btn', 'data-testid': 'btn-prev', title: 'Previous change (Shift+F7, Alt+Up)', 'aria-label': 'Prev change' }, '↑ Prev');
   const btnNext = h('button', { type: 'button', class: 'btn', 'data-testid': 'btn-next', title: 'Next change (F7, Alt+Down)', 'aria-label': 'Next change' }, 'Next ↓');
   const changePos = h('span', { class: 'change-pos', 'data-testid': 'change-position', 'aria-live': 'polite' }, 'no changes');
-  const selectView = h('select', { id: 'sd-view', 'data-testid': 'opt-view-mode' },
+  const selectView = h('select', { id: 'sd-view', 'data-testid': 'opt-view-mode', title: 'View' },
     h('option', { value: 'side-by-side' }, 'Side by side'),
     h('option', { value: 'inline' }, 'Inline'));
-  const selectLang = h('select', { id: 'sd-lang', 'data-testid': 'select-language' });
+  const selectLang = h('select', { id: 'sd-lang', 'data-testid': 'select-language', title: 'Language (both panes)' });
   const optTrim = checkbox('opt-trim-ws', 'Trim whitespace', 'Ignore leading and trailing whitespace');
   const optAllWs = checkbox('opt-ignore-all-ws', 'Ignore all whitespace', 'Ignore every whitespace difference');
   const optWrap = checkbox('opt-wrap', 'Wrap', 'Word wrap');
@@ -77,11 +93,19 @@ async function startApp({ root, engine, registry }: AppDeps): Promise<void> {
   const btnTheme = h('button', { type: 'button', class: 'btn', 'data-testid': 'btn-theme' });
   const btnHelp = h('button', { type: 'button', class: 'btn', title: 'Keyboard shortcuts (?)', 'aria-label': 'Keyboard shortcuts', 'aria-haspopup': 'dialog' }, '?');
 
+  const explorerSummary = h('span', { class: 'ex-summary' });
+  const btnExplorer = h('button', {
+    type: 'button', class: 'btn toggle btn-explorer', 'data-testid': 'btn-explorer', 'aria-pressed': 'false',
+    'aria-controls': 'sd-explorer', title: 'Project explorer (Ctrl+B)', hidden: true,
+  }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), h('span', { class: 'ex-icon', 'aria-hidden': 'true' }, '☰'), explorerSummary);
+
   const toolbar = h('div', { class: 'toolbar', role: 'toolbar', 'aria-label': 'Diff controls' },
     h('span', { class: 'brand' }, 'SideDiff'),
+    btnExplorer,
     group(btnDiffOnly, h('label', { for: 'sd-context', class: 'field' }, 'Context', inputContext)),
     group(btnPrev, changePos, btnNext),
-    group(h('label', { for: 'sd-view', class: 'field' }, 'View', selectView), h('label', { for: 'sd-lang', class: 'field' }, 'Language', selectLang)),
+    // The selects' values are self-describing; their captions stay for screen readers.
+    group(h('label', { for: 'sd-view', class: 'visually-hidden' }, 'View'), selectView, h('label', { for: 'sd-lang', class: 'visually-hidden' }, 'Language'), selectLang),
     group(optTrim.wrap, optAllWs.wrap, optWrap.wrap, optMinimap.wrap),
     group(h('label', { for: 'sd-font', class: 'field' }, 'Font', inputFont)),
     h('span', { class: 'spacer' }),
@@ -119,8 +143,8 @@ async function startApp({ root, engine, registry }: AppDeps): Promise<void> {
     btnCopy.addEventListener('click', () => void copySide(side));
     btnClear.addEventListener('click', () => {
       if (!ready) return;
-      engine.setText(side, '');
-      engine.focus(side);
+      // Focus stays on the button, so Ctrl+Z right away undoes the clear.
+      replaceText(side, '', 'clear');
     });
     label.addEventListener('input', () => {
       settings.labels[side] = label.value.trim() || side.toUpperCase();
@@ -144,7 +168,11 @@ async function startApp({ root, engine, registry }: AppDeps): Promise<void> {
   btnErrorClose.addEventListener('click', () => (errorBanner.hidden = true));
 
   const editorEl = h('div', { class: 'editor', 'data-testid': 'editor' });
-  const editorWrap = h('div', { class: 'editor-wrap' }, editorEl, panes.a.hint, panes.b.hint, panes.a.drop, panes.b.drop);
+  const missing: Record<Side, HTMLElement> = {
+    a: h('div', { class: 'empty-hint hint-a missing-hint', 'data-testid': 'missing-hint-a', hidden: true }),
+    b: h('div', { class: 'empty-hint hint-b missing-hint', 'data-testid': 'missing-hint-b', hidden: true }),
+  };
+  const editorWrap = h('div', { class: 'editor-wrap' }, editorEl, panes.a.hint, panes.b.hint, missing.a, missing.b, panes.a.drop, panes.b.drop);
   addDropTarget(editorWrap, (e) => {
     if (settings.diff.viewMode === 'inline') return 'b';
     const rect = editorWrap.getBoundingClientRect();
@@ -178,8 +206,47 @@ async function startApp({ root, engine, registry }: AppDeps): Promise<void> {
     addLangList,
     h('form', { method: 'dialog', class: 'dialog-actions' }, h('button', { type: 'submit', class: 'btn' }, 'Close')));
 
+  // ---------- item view breadcrumb ----------
+  const btnBack = h('button', { type: 'button', class: 'btn small', 'data-testid': 'btn-back', title: 'Back to the whole project (Alt+Left, Esc)' }, '← Project');
+  const crumbGroup = h('span', { class: 'crumb-group' });
+  const crumbName = h('strong', { class: 'crumb-name' });
+  const crumbDetail = h('span', { class: 'crumb-detail' });
+  const crumbStatus = h('span', { class: 'crumb-status' });
+  // One button per view kind of the open item (code / changes / xml), labelled by the indexer.
+  const viewSwitch = h('div', { class: 'seg-group', role: 'group', 'aria-label': 'Item view', 'data-testid': 'item-view-switch' });
+  const btnShowInProject = h('button', { type: 'button', class: 'btn small', 'data-testid': 'btn-show-in-project', title: 'Show this item in the whole project' }, 'Show in project');
+  const itemPos = h('span', { class: 'item-pos' });
+  const relatedBox = h('span', { class: 'item-related', 'data-testid': 'item-related', role: 'group', 'aria-label': 'Related items of this screen', hidden: true });
+  const btnPrevItem = h('button', { type: 'button', class: 'btn small', 'data-testid': 'btn-prev-item', 'aria-label': 'Previous item', title: 'Previous item (Alt+PageUp)' }, '‹');
+  const btnNextItem = h('button', { type: 'button', class: 'btn small', 'data-testid': 'btn-next-item', 'aria-label': 'Next item', title: 'Next item (Alt+PageDown)' }, '›');
+  const itemBar = h('nav', { class: 'item-bar', 'data-testid': 'item-bar', 'aria-label': 'Item view', hidden: true },
+    btnBack, h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '/'), crumbGroup, h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '/'),
+    crumbStatus, crumbName, crumbDetail, viewSwitch, relatedBox, h('span', { class: 'spacer' }), btnShowInProject, btnPrevItem, itemPos, btnNextItem);
+
+  // ---------- quick open ----------
+  const qoInput = h('input', {
+    type: 'text', class: 'qo-input', 'data-testid': 'quick-open-input', placeholder: 'Type part of an item name or path…',
+    role: 'combobox', 'aria-expanded': 'true', 'aria-controls': 'sd-qo-list', 'aria-autocomplete': 'list', 'aria-label': 'Find an item', spellcheck: 'false', autocomplete: 'off',
+  });
+  const qoList = h('ul', { class: 'qo-list', id: 'sd-qo-list', role: 'listbox', 'aria-label': 'Matching items' });
+  const qoFoot = h('p', { class: 'qo-foot muted' });
+  const quickOpen = h('dialog', { class: 'dialog quick-open', 'data-testid': 'quick-open', 'aria-label': 'Quick open' }, qoInput, qoList, qoFoot);
+
+  // ---------- toasts ----------
+  const toast = h('div', { class: 'toast', 'data-testid': 'toast', role: 'status', 'aria-live': 'polite', hidden: true });
+
+  const explorer = createExplorer({
+    settings: explorerSettings,
+    save,
+    labels: () => settings.labels,
+    open: views ? (item) => void openItem(item) : null,
+  });
+  explorer.drawer.id = 'sd-explorer';
+  const mainCol = h('div', { class: 'main-col' }, itemBar, paneRow, degradedBanner, errorBanner, editorWrap);
+  const workspace = h('div', { class: 'workspace' }, explorer.drawer, explorer.splitter, mainCol);
+
   root.classList.add('sd-app');
-  root.replaceChildren(toolbar, paneRow, degradedBanner, errorBanner, editorWrap, statsBar, shortcutsDialog, addLangDialog);
+  root.replaceChildren(toolbar, workspace, statsBar, toast, shortcutsDialog, addLangDialog, quickOpen);
 
   // ---------- rendering ----------
   function renderLabels(syncInputs: boolean): void {
@@ -194,6 +261,8 @@ async function startApp({ root, engine, registry }: AppDeps): Promise<void> {
       p.btnClear.setAttribute('aria-label', `Clear side ${side.toUpperCase()}: ${name}`);
     }
     document.title = `${settings.labels.a} ↔ ${settings.labels.b} · SideDiff`;
+    explorer.relabel();
+    renderItemBar();
   }
 
   function renderOptions(): void {
@@ -248,7 +317,7 @@ async function startApp({ root, engine, registry }: AppDeps): Promise<void> {
   }
 
   function renderEmpty(): void {
-    for (const side of SIDES) panes[side].hint.hidden = !empty[side];
+    for (const side of SIDES) panes[side].hint.hidden = !empty[side] || current !== null;
   }
 
   function renderDegraded(info: DegradedInfo | null): void {
@@ -333,7 +402,7 @@ async function startApp({ root, engine, registry }: AppDeps): Promise<void> {
       showNotice(`Could not read ${file.name}: ${errorText(err)}`, 'error');
       return;
     }
-    engine.setText(side, text);
+    replaceText(side, text, 'load');
     detectFrom(text);
     showNotice(`Loaded ${file.name} into ${settings.labels[side]} (${formatBytes(file.size)})`);
   }
@@ -355,6 +424,290 @@ async function startApp({ root, engine, registry }: AppDeps): Promise<void> {
     renderLabels(true);
     save();
   }
+
+  /** Whole-text replacement that Ctrl+Z can undo when the engine supports it. */
+  function replaceText(side: Side, text: string, reason: ReplaceReason): void {
+    if (history) history.replaceText(side, text, reason);
+    else engine.setText(side, text);
+  }
+
+  let toastTimer: ReturnType<typeof setTimeout> | undefined;
+  function showToast(text: string): void {
+    toast.textContent = text;
+    toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => (toast.hidden = true), 5000);
+  }
+
+  function historyText(side: Side | 'both', action: 'undo' | 'redo', reason: ReplaceReason): string {
+    const verb = action === 'undo' ? 'Undid' : 'Redid';
+    const label = side === 'both' ? '' : settings.labels[side];
+    const what: Record<ReplaceReason, string> = {
+      clear: `clear of ${label}`,
+      load: `file load into ${label}`,
+      paste: `paste into ${label}`,
+      set: `replacement of ${label}`,
+      swap: `swap of ${settings.labels.a} and ${settings.labels.b}`,
+    };
+    return `${verb} ${what[reason]} · ${action === 'undo' ? 'Ctrl+Y to redo' : 'Ctrl+Z to undo'}`;
+  }
+
+  // ---------- project explorer and item views ----------
+  let index: ProjectIndex | null = null;
+  let current: { item: ProjectItem; view: ItemViewKind } | null = null;
+  const fullMeta: Record<Side, string> = { a: 'empty', b: 'empty' };
+  const isProject = (): boolean => !!index && (index.sides.a.isProject || index.sides.b.isProject);
+
+  function renderExplorerChrome(): void {
+    const on = isProject();
+    btnExplorer.hidden = !on;
+    const open = on && explorerSettings.open;
+    explorer.drawer.hidden = !open;
+    explorer.splitter.hidden = !open;
+    btnExplorer.setAttribute('aria-pressed', String(open));
+    if (index && on) {
+      const changed = changedCount(index);
+      explorerSummary.textContent = `${fmt(index.items.length)} items · ${fmt(changed)} changed`;
+      btnExplorer.setAttribute('aria-label', `Project explorer: ${fmt(index.items.length)} items, ${fmt(changed)} changed`);
+    }
+  }
+
+  function toggleExplorer(open = !explorerSettings.open): void {
+    explorerSettings.open = open;
+    save();
+    renderExplorerChrome();
+    if (open) explorer.focusList();
+  }
+
+  let indexTimer: ReturnType<typeof setTimeout> | undefined;
+  function scheduleIndex(): void {
+    if (!project) return;
+    clearTimeout(indexTimer);
+    indexTimer = setTimeout(() => void runIndex(), REINDEX_DELAY_MS);
+  }
+
+  function setIndexing(on: boolean): void {
+    btnExplorer.dataset.indexing = String(on);
+    root.dataset.indexing = String(on);
+  }
+
+  async function runIndex(): Promise<void> {
+    if (!project) return;
+    setIndexing(true);
+    let next: ProjectIndex;
+    try {
+      performance.mark('sidediff:index-start');
+      next = await project.index(engine.getText('a'), engine.getText('b'));
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return; // a newer call owns the spinner
+      setIndexing(false);
+      showNotice(`Could not index the project: ${errorText(err)}`, 'error');
+      return;
+    }
+    setIndexing(false);
+    performance.mark('sidediff:index-done');
+    index = next;
+    explorer.setIndex(isProject() ? next : null);
+    renderExplorerChrome();
+    performance.mark('sidediff:explorer-rendered');
+    if (!current) return;
+    const id = current.item.id;
+    const still = isProject() ? next.items.find((i) => i.id === id) : undefined;
+    if (still) {
+      void openItem(still, current.view.id);
+    } else {
+      const name = current.item.name;
+      views?.closeView();
+      showToast(`${name} is no longer in either side; back to the whole project`);
+    }
+  }
+
+  let openSeq = 0;
+  async function openItem(item: ProjectItem, viewId?: ItemViewKind['id']): Promise<void> {
+    if (!views || !project || !ready) return;
+    const kind = item.views.find((v) => v.id === viewId) ?? item.views[0];
+    if (!kind) return;
+    const seq = ++openSeq;
+    let language = kind.language;
+    let a: string | null;
+    let b: string | null;
+    try {
+      [a, b] = await Promise.all([project.viewText(item.id, kind.id, 'a'), project.viewText(item.id, kind.id, 'b')]);
+    } catch (err) {
+      if (seq === openSeq) showToast(`Could not open ${item.name}: ${errorText(err)}`);
+      return;
+    }
+    try {
+      await registry.ensureLoaded(language);
+    } catch {
+      language = 'plaintext';
+    }
+    if (seq !== openSeq) return; // a newer open (or Back) won
+    current = { item, view: kind };
+    views.openView({ key: `${item.id}#${kind.id}`, a, b, language });
+    selectLang.value = language;
+    explorer.setActive(item.id);
+    renderItemBar();
+  }
+
+  function renderItemBar(): void {
+    const open = current !== null;
+    itemBar.hidden = !open;
+    root.dataset.itemView = String(open);
+    selectLang.disabled = open;
+    selectLang.title = open ? 'Language: the item view picks its own' : 'Language (both panes)';
+    for (const side of SIDES) {
+      const p = panes[side];
+      p.meta.textContent = open ? 'read-only item view' : fullMeta[side];
+      p.btnOpen.disabled = open;
+      p.btnClear.disabled = open;
+      const absent = open && current?.item[side] === null;
+      missing[side].hidden = !absent;
+      if (absent) {
+        const other = settings.labels[side === 'a' ? 'b' : 'a'];
+        missing[side].replaceChildren(h('strong', {}, `Not in ${settings.labels[side]}`), h('span', {}, `This item exists only in ${other}.`));
+      }
+    }
+    btnSwap.disabled = open;
+    renderEmpty();
+    if (!current) {
+      selectLang.value = settings.language;
+      return;
+    }
+    const { item, view } = current;
+    crumbGroup.textContent = GROUP_LABELS[item.group];
+    crumbStatus.replaceChildren(glyph(item.status), h('span', { class: 'visually-hidden' }, statusWord(item.status, settings.labels)));
+    crumbName.textContent = item.name;
+    crumbName.title = item.id;
+    crumbDetail.textContent = item.detail;
+    viewSwitch.hidden = item.views.length < 2;
+    viewSwitch.replaceChildren(...item.views.map((v) => {
+      const b = h('button', { type: 'button', class: 'btn small seg', 'data-testid': `item-view-${v.id}`, 'aria-pressed': String(v.id === view.id) }, v.label);
+      b.addEventListener('click', () => {
+        if (current && v.id !== current.view.id) void openItem(current.item, v.id);
+      });
+      return b;
+    }));
+    renderRelated(item);
+    const list = explorer.visibleItems();
+    const i = list.findIndex((x) => x.id === item.id);
+    itemPos.textContent = i >= 0 ? `${fmt(i + 1)} / ${fmt(list.length)}` : `– / ${fmt(list.length)}`;
+    itemPos.title = 'Position in the explorer’s current filter';
+    btnPrevItem.disabled = list.length === 0 || (list.length === 1 && i === 0);
+    btnNextItem.disabled = btnPrevItem.disabled;
+  }
+
+  /** Other items of the same screen (page, its files, site map entry, editor fields), one click apart. */
+  function renderRelated(item: ProjectItem): void {
+    const related = item.screenId && index ? index.items.filter((x) => x.screenId === item.screenId && x.id !== item.id) : [];
+    relatedBox.hidden = related.length === 0;
+    relatedBox.replaceChildren(h('span', { class: 'related-label' }, `${item.screenId ?? ''}:`), ...related.map((x) => {
+      const link = h('button', {
+        type: 'button', class: 'related-link', 'data-id': x.id,
+        title: `${x.element}: ${x.detail}`, 'aria-label': `${x.name}, ${x.detail}: ${statusWord(x.status, settings.labels)}`,
+      }, glyph(x.status), x.element === 'Page' ? 'Page' : x.name);
+      link.addEventListener('click', () => {
+        void openItem(x);
+        if (!explorer.drawer.hidden) explorer.reveal(x.id);
+      });
+      return link;
+    }));
+  }
+
+  function stepItem(delta: 1 | -1): void {
+    if (!views || !current) return;
+    const list = explorer.visibleItems();
+    if (list.length === 0) return;
+    const i = list.findIndex((x) => x.id === current?.item.id);
+    const next = i < 0 ? (delta > 0 ? list[0] : list[list.length - 1]) : list[(i + delta + list.length) % list.length];
+    if (!next) return;
+    void openItem(next);
+    if (!explorer.drawer.hidden) explorer.reveal(next.id);
+  }
+
+  function back(): void {
+    if (!current || !views) return;
+    openSeq++;
+    const id = current.item.id;
+    views.closeView();
+    if (!explorer.drawer.hidden) {
+      explorer.reveal(id);
+      explorer.focusList();
+    }
+  }
+
+  function showInProject(): void {
+    if (!current || !views) return;
+    const side: Side = current.item.b ? 'b' : 'a';
+    views.revealLine(side, current.item[side]?.startLine ?? 1);
+  }
+
+  // Quick open (Ctrl+P): fuzzy over every item, ignoring the explorer filter.
+  let qoResults: ProjectItem[] = [];
+  let qoCursor = 0;
+  function renderQuickOpen(): void {
+    const q = qoInput.value.trim();
+    const items = index?.items ?? [];
+    qoResults = q === ''
+      ? items.slice(0, QUICK_OPEN_LIMIT)
+      : items.map((it) => [it, fuzzyItem(q, it.name, it.detail)] as const)
+        .filter((x): x is readonly [ProjectItem, number] => x[1] !== null)
+        .sort((x, y) => y[1] - x[1])
+        .slice(0, QUICK_OPEN_LIMIT)
+        .map((x) => x[0]);
+    qoCursor = Math.min(qoCursor, Math.max(0, qoResults.length - 1));
+    qoList.replaceChildren(...qoResults.map((it, i) => {
+      const li = h('li', {
+        id: `sd-qo-${i}`, role: 'option', class: 'qo-item', 'data-testid': 'quick-open-item', 'data-id': it.id, 'data-status': it.status,
+        'aria-selected': String(i === qoCursor), 'aria-label': `${it.name}, ${GROUP_LABELS[it.group]}: ${statusWord(it.status, settings.labels)}`,
+      }, glyph(it.status), h('span', { class: 'qo-name' }, it.name), h('span', { class: 'qo-detail' }, it.detail), h('span', { class: 'qo-group' }, GROUP_LABELS[it.group]));
+      li.addEventListener('mousedown', (e) => e.preventDefault());
+      li.addEventListener('click', () => chooseQuickOpen(i));
+      return li;
+    }));
+    if (qoResults.length) qoInput.setAttribute('aria-activedescendant', `sd-qo-${qoCursor}`);
+    else qoInput.removeAttribute('aria-activedescendant');
+    qoList.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
+    const more = q === '' && items.length > QUICK_OPEN_LIMIT ? ` · showing ${QUICK_OPEN_LIMIT} of ${fmt(items.length)}, type to search` : '';
+    qoFoot.textContent = qoResults.length === 0 ? 'No matching items.' : `${views ? 'Enter opens' : 'Enter shows it in the explorer'} · ↑↓ move · Esc closes${more}`;
+  }
+  function chooseQuickOpen(i: number): void {
+    const it = qoResults[i];
+    if (!it) return;
+    quickOpen.close();
+    if (views) void openItem(it);
+    else if (!explorerSettings.open) toggleExplorer(true);
+    if (explorerSettings.open) explorer.reveal(it.id);
+  }
+  function openQuickOpen(): void {
+    if (!isProject()) return;
+    qoInput.value = '';
+    qoCursor = 0;
+    renderQuickOpen();
+    openDialog(quickOpen);
+    qoInput.focus();
+  }
+  qoInput.addEventListener('input', () => {
+    qoCursor = 0;
+    renderQuickOpen();
+  });
+  qoInput.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') qoCursor = Math.min(qoCursor + 1, qoResults.length - 1);
+    else if (e.key === 'ArrowUp') qoCursor = Math.max(qoCursor - 1, 0);
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      chooseQuickOpen(qoCursor);
+      return;
+    } else return;
+    e.preventDefault();
+    renderQuickOpen();
+  });
+
+  btnExplorer.addEventListener('click', () => toggleExplorer());
+  btnBack.addEventListener('click', back);
+  btnShowInProject.addEventListener('click', showInProject);
+  btnPrevItem.addEventListener('click', () => stepItem(-1));
+  btnNextItem.addEventListener('click', () => stepItem(1));
 
   // ---------- drag and drop (files only; text drags stay with Monaco) ----------
   let dropTimer: ReturnType<typeof setTimeout> | undefined;
@@ -464,7 +817,7 @@ async function startApp({ root, engine, registry }: AppDeps): Promise<void> {
   }
   function closeDialogs(): boolean {
     let closed = false;
-    for (const d of [shortcutsDialog, addLangDialog]) {
+    for (const d of [shortcutsDialog, addLangDialog, quickOpen]) {
       if (d.open) {
         d.close();
         closed = true;
@@ -473,17 +826,47 @@ async function startApp({ root, engine, registry }: AppDeps): Promise<void> {
     return closed;
   }
 
+  /** Esc should stay with the filter box (clears it) or Monaco's find widget (closes it). */
+  function escapeBelongsToTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) return false;
+    if (target instanceof HTMLInputElement && target.value !== '' && target.type === 'search') return true;
+    return target.closest('.editor') !== null && editorEl.querySelector('.find-widget.visible') !== null;
+  }
+
+  function undoOrRedo(action: 'undo' | 'redo'): void {
+    if (!history || !ready) return;
+    const done = action === 'undo' ? history.undoReplace() : history.redoReplace();
+    if (!done) showToast(action === 'undo' ? 'Nothing to undo' : 'Nothing to redo');
+  }
+
   // ---------- keyboard shortcuts: document, capture phase, so Monaco can't swallow them ----------
   document.addEventListener('keydown', (e) => {
-    const dialogOpen = shortcutsDialog.open || addLangDialog.open;
+    const dialogOpen = shortcutsDialog.open || addLangDialog.open || quickOpen.open;
+    const stop = (): void => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
     if (e.key === 'Escape') {
-      if (closeDialogs()) {
-        e.preventDefault();
-        e.stopPropagation();
+      if (closeDialogs()) stop();
+      else if (current && !escapeBelongsToTarget(e.target)) {
+        back();
+        stop();
       }
       return;
     }
-    if (dialogOpen || e.ctrlKey || e.metaKey) return;
+    if (dialogOpen) return;
+    if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+      const key = e.key.toLowerCase();
+      if (key === 'b' && !e.shiftKey && isProject()) toggleExplorer();
+      else if (key === 'p' && !e.shiftKey && isProject()) openQuickOpen();
+      // Inside an editor the engine owns Ctrl+Z (Monaco's stack first, then the replace history).
+      else if (key === 'z' && !e.shiftKey && history && !isTextTarget(e.target)) undoOrRedo('undo');
+      else if (((key === 'y' && !e.shiftKey) || (key === 'z' && e.shiftKey)) && history && !isTextTarget(e.target)) undoOrRedo('redo');
+      else return;
+      stop();
+      return;
+    }
+    if (e.ctrlKey || e.metaKey) return;
     let handled = true;
     if (e.key === 'F7' && !e.altKey) {
       if (ready) {
@@ -496,6 +879,10 @@ async function startApp({ root, engine, registry }: AppDeps): Promise<void> {
       if (ready) engine.prevChange();
     } else if (e.altKey && !e.shiftKey && e.code === 'KeyH') {
       toggleDiffOnly();
+    } else if (e.altKey && !e.shiftKey && e.key === 'ArrowLeft' && current) {
+      back();
+    } else if (e.altKey && !e.shiftKey && (e.key === 'PageUp' || e.key === 'PageDown') && current) {
+      stepItem(e.key === 'PageUp' ? -1 : 1);
     } else if (e.key === '?' && !e.altKey && !isTextTarget(e.target)) {
       openDialog(shortcutsDialog);
     } else {
@@ -514,6 +901,8 @@ async function startApp({ root, engine, registry }: AppDeps): Promise<void> {
   renderPosition();
   renderStats(null);
   renderEmpty();
+  renderItemBar();
+  renderExplorerChrome();
 
   // 2. Language before mount; fall back to plain text if the saved one is gone.
   try {
@@ -545,8 +934,24 @@ async function startApp({ root, engine, registry }: AppDeps): Promise<void> {
   engine.on('degraded', renderDegraded);
   engine.on('content', ({ side, lines, bytes }) => {
     empty[side] = bytes === 0;
-    panes[side].meta.textContent = bytes === 0 ? 'empty' : `${fmt(lines)} ${lines === 1 ? 'line' : 'lines'} · ${formatBytes(bytes)}`;
+    fullMeta[side] = bytes === 0 ? 'empty' : `${fmt(lines)} ${lines === 1 ? 'line' : 'lines'} · ${formatBytes(bytes)}`;
+    if (!current) panes[side].meta.textContent = fullMeta[side];
     renderEmpty();
+    scheduleIndex();
+  });
+  engine.on('view', ({ key }) => {
+    if (key !== null) return;
+    current = null;
+    explorer.setActive(null);
+    renderItemBar();
+  });
+  engine.on('history', ({ side, action, reason }) => {
+    if (reason === 'swap') {
+      settings.labels = { a: settings.labels.b, b: settings.labels.a };
+      renderLabels(true);
+      save();
+    }
+    showToast(historyText(side, action, reason));
   });
   engine.on('paste', ({ sample }) => detectFrom(sample));
 

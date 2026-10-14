@@ -6,11 +6,15 @@ import type {
   DiffEngineEvents,
   DiffOptions,
   DiffStats,
+  ItemView,
+  ItemViewApi,
   LanguageId,
   LanguageInfo,
   LanguagePack,
   LanguageRegistry,
+  ReplaceReason,
   Side,
+  TextHistoryApi,
   ThemeId,
   Unsubscribe,
 } from '../../types';
@@ -18,10 +22,18 @@ import { LARGE_BYTES, LARGE_LINES } from '../../types';
 
 type Handler = (payload: never) => void;
 
-export interface FakeEngine extends DiffEngine {
+export interface FakeEngine extends DiffEngine, ItemViewApi, TextHistoryApi {
   /** Milliseconds the fake blocks the main thread per diff, to test the progress animation. */
   busyMs: number;
   calls: string[];
+}
+
+interface HistoryEntry {
+  seq: number;
+  side: Side | 'both';
+  reason: ReplaceReason;
+  /** Text(s) to restore. */
+  texts: Partial<Record<Side, string>>;
 }
 
 export function createFakeEngine(): FakeEngine {
@@ -37,12 +49,26 @@ export function createFakeEngine(): FakeEngine {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let lastFocused: Side = 'a';
   let degraded = false;
+  let view: ItemView | null = null;
+  let seq = 0;
+  const undo: HistoryEntry[] = [];
+  const redo: HistoryEntry[] = [];
 
   function emit<K extends keyof DiffEngineEvents>(event: K, payload: DiffEngineEvents[K]): void {
     for (const fn of handlers.get(event) ?? []) (fn as (p: DiffEngineEvents[K]) => void)(payload);
   }
 
   const lineCount = (s: string): number => (s === '' ? 0 : s.split('\n').length);
+  const shown = (side: Side): string => (view ? (view[side] ?? '') : text[side]);
+
+  function renderAreas(): void {
+    for (const side of ['a', 'b'] as const) {
+      const area = areas[side];
+      if (!area) continue;
+      area.value = shown(side);
+      area.readOnly = view !== null;
+    }
+  }
 
   function contentChanged(side: Side): void {
     emit('content', { side, lines: lineCount(text[side]), bytes: new Blob([text[side]]).size });
@@ -56,18 +82,18 @@ export function createFakeEngine(): FakeEngine {
         reason: 'Over 400,000 lines or 40 MB.',
       } : null);
     }
-    schedule();
+    if (!view) schedule();
   }
 
   function schedule(): void {
     clearTimeout(timer);
     computing = true;
-    emit('diff:start', { linesA: lineCount(text.a), linesB: lineCount(text.b) });
+    emit('diff:start', { linesA: lineCount(shown('a')), linesB: lineCount(shown('b')) });
     const t0 = performance.now();
     timer = setTimeout(() => {
       const end = performance.now() + fake.busyMs;
       while (performance.now() < end) { /* simulate a busy main thread */ }
-      if (text.a.includes('FAIL') || text.b.includes('FAIL')) {
+      if (shown('a').includes('FAIL') || shown('b').includes('FAIL')) {
         computing = false;
         emit('diff:error', { message: 'fake engine: input contained FAIL' });
         return;
@@ -88,8 +114,8 @@ export function createFakeEngine(): FakeEngine {
 
   // Naive positional comparison: good enough to drive the UI.
   function computeStats(t0: number): DiffStats {
-    const la = text.a === '' ? [] : text.a.split('\n');
-    const lb = text.b === '' ? [] : text.b.split('\n');
+    const la = shown('a') === '' ? [] : shown('a').split('\n');
+    const lb = shown('b') === '' ? [] : shown('b').split('\n');
     const n = Math.max(la.length, lb.length);
     hunks = [];
     let added = 0, removed = 0, modified = 0;
@@ -108,17 +134,20 @@ export function createFakeEngine(): FakeEngine {
     return { added, removed, modified, changes: hunks.length, linesA: la.length, linesB: lb.length, computeMs: performance.now() - t0 + fake.busyMs, identical: hunks.length === 0, quitEarly: false };
   }
 
-  function go(index: number): void {
-    if (hunks.length === 0) return;
-    const i = ((index % hunks.length) + hunks.length) % hunks.length;
-    position = { index: i + 1, total: hunks.length };
-    const line = hunks[i]?.start ?? 0;
+  function scrollTo(line: number): void {
     for (const side of ['a', 'b'] as const) {
       const area = areas[side];
       if (!area) continue;
       const lh = parseFloat(getComputedStyle(area).lineHeight) || 16;
       area.scrollTop = Math.max(0, (line - 3) * lh);
     }
+  }
+
+  function go(index: number): void {
+    if (hunks.length === 0) return;
+    const i = ((index % hunks.length) + hunks.length) % hunks.length;
+    position = { index: i + 1, total: hunks.length };
+    scrollTo(hunks[i]?.start ?? 0);
     emit('position', position);
   }
 
@@ -132,6 +161,41 @@ export function createFakeEngine(): FakeEngine {
     }
   }
 
+  function setRaw(side: Side, value: string): void {
+    text[side] = value;
+    if (!view && areas[side]) areas[side].value = value;
+    contentChanged(side);
+  }
+
+  function latest(stack: HistoryEntry[], side?: Side): number {
+    for (let i = stack.length - 1; i >= 0; i--) {
+      const e = stack[i];
+      if (e && (side === undefined || e.side === side || e.side === 'both')) return i;
+    }
+    return -1;
+  }
+
+  /** Pops an entry from `from`, applies it, pushes the inverse onto `to`. */
+  function step(from: HistoryEntry[], to: HistoryEntry[], action: 'undo' | 'redo', side?: Side): boolean {
+    const i = latest(from, side);
+    const e = from[i];
+    if (!e) return false;
+    from.splice(i, 1);
+    const inverse: HistoryEntry = { ...e, seq: ++seq, texts: {} };
+    if (e.side === 'both') {
+      [text.a, text.b] = [text.b, text.a];
+      renderAreas();
+      emit('content', { side: 'a', lines: lineCount(text.a), bytes: text.a.length });
+      contentChanged('b');
+    } else {
+      inverse.texts[e.side] = text[e.side];
+      setRaw(e.side, e.texts[e.side] ?? '');
+    }
+    to.push(inverse);
+    emit('history', { side: e.side, action, reason: e.reason });
+    return true;
+  }
+
   const fake: FakeEngine = {
     busyMs: 0,
     calls: [],
@@ -143,7 +207,7 @@ export function createFakeEngine(): FakeEngine {
         area.spellcheck = false;
         area.setAttribute('aria-label', `Fake pane ${side.toUpperCase()}`);
         area.style.cssText = 'flex:1;margin:0;border:0;border-right:1px solid var(--border);resize:none;background:var(--bg);color:var(--fg);font-family:Consolas,monospace;padding:4px 8px;outline-offset:-2px;overflow:auto';
-        area.addEventListener('input', () => { text[side] = area.value; contentChanged(side); });
+        area.addEventListener('input', () => { if (!view) { text[side] = area.value; redo.length = 0; contentChanged(side); } });
         area.addEventListener('focus', () => (lastFocused = side));
         area.addEventListener('paste', (e) => {
           const sample = (e.clipboardData?.getData('text/plain') ?? '').slice(0, 8192);
@@ -157,9 +221,7 @@ export function createFakeEngine(): FakeEngine {
     },
     setText(side, value) {
       fake.calls.push(`setText:${side}`);
-      text[side] = value;
-      if (areas[side]) areas[side].value = value;
-      contentChanged(side);
+      setRaw(side, value);
     },
     getText: (side) => text[side],
     setLanguage(id: LanguageId) { fake.calls.push(`setLanguage:${id}`); },
@@ -172,9 +234,11 @@ export function createFakeEngine(): FakeEngine {
     },
     setTheme(theme: ThemeId) { fake.calls.push(`setTheme:${theme}`); },
     swap() {
+      fake.calls.push('swap');
+      undo.push({ seq: ++seq, side: 'both', reason: 'swap', texts: {} });
+      redo.length = 0;
       [text.a, text.b] = [text.b, text.a];
-      if (areas.a) areas.a.value = text.a;
-      if (areas.b) areas.b.value = text.b;
+      renderAreas();
       emit('content', { side: 'a', lines: lineCount(text.a), bytes: text.a.length });
       contentChanged('b');
     },
@@ -194,6 +258,42 @@ export function createFakeEngine(): FakeEngine {
       return () => set.delete(handler as Handler);
     },
     dispose() { container?.replaceChildren(); },
+
+    // ItemViewApi
+    openView(v) {
+      fake.calls.push(`openView:${v.key}`);
+      view = v;
+      renderAreas();
+      emit('view', { key: v.key });
+      schedule();
+    },
+    closeView() {
+      if (!view) return;
+      fake.calls.push('closeView');
+      view = null;
+      renderAreas();
+      emit('view', { key: null });
+      schedule();
+    },
+    getView: () => view?.key ?? null,
+    revealLine(side, line) {
+      fake.calls.push(`revealLine:${side}:${line}`);
+      fake.closeView();
+      scrollTo(line);
+      areas[side]?.focus();
+    },
+
+    // TextHistoryApi
+    replaceText(side, value, reason) {
+      fake.calls.push(`replaceText:${side}:${reason}`);
+      undo.push({ seq: ++seq, side, reason, texts: { [side]: text[side] } });
+      redo.length = 0;
+      setRaw(side, value);
+    },
+    undoReplace: (side) => step(undo, redo, 'undo', side),
+    redoReplace: (side) => step(redo, undo, 'redo', side),
+    canUndoReplace: (side) => latest(undo, side) >= 0,
+    canRedoReplace: (side) => latest(redo, side) >= 0,
   };
   return fake;
 }

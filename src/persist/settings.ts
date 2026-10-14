@@ -2,9 +2,12 @@
 import {
   CONTEXT_LINES_MAX,
   CONTEXT_LINES_MIN,
+  DEFAULT_EXPLORER,
   DEFAULT_SETTINGS,
   type AppSettings,
   type DiffOptions,
+  type ExplorerSettings,
+  type ItemFilter,
   type SettingsStore,
   type ThemeId,
   type ViewMode,
@@ -14,6 +17,9 @@ export const SETTINGS_KEY = 'sidediff:settings:v1';
 export const FONT_SIZE_MIN = 8;
 export const FONT_SIZE_MAX = 32;
 export const LABEL_MAX_LENGTH = 60;
+export const EXPLORER_WIDTH_MIN = 200;
+export const EXPLORER_WIDTH_MAX = 600;
+const FILTERS: readonly ItemFilter[] = ['all', 'changed', 'only-a', 'only-b'];
 
 /** The subset of `Storage` the store uses, so tests can inject a fake. */
 export type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
@@ -51,7 +57,12 @@ function label(value: unknown, fallback: string): string {
 
 /** Deep copy of the defaults so callers can mutate the result freely. */
 export function defaultSettings(): AppSettings {
-  return { ...DEFAULT_SETTINGS, labels: { ...DEFAULT_SETTINGS.labels }, diff: { ...DEFAULT_SETTINGS.diff } };
+  return {
+    ...DEFAULT_SETTINGS,
+    labels: { ...DEFAULT_SETTINGS.labels },
+    diff: { ...DEFAULT_SETTINGS.diff },
+    explorer: { ...DEFAULT_EXPLORER },
+  };
 }
 
 /** Merges an unknown value (parsed JSON) over the defaults, field by field, clamping numbers. */
@@ -81,6 +92,18 @@ export function normalizeSettings(raw: unknown): AppSettings {
       minimap: bool(d.minimap, def.minimap),
     };
     out.diff = diff;
+  }
+
+  // Settings saved before the explorer existed have no `explorer`: keep the defaults.
+  if (isRecord(raw.explorer)) {
+    const e = raw.explorer;
+    const def = { ...DEFAULT_EXPLORER };
+    const explorer: ExplorerSettings = {
+      open: bool(e.open, def.open),
+      width: int(e.width, def.width, EXPLORER_WIDTH_MIN, EXPLORER_WIDTH_MAX),
+      filter: FILTERS.find((f) => f === e.filter) ?? def.filter,
+    };
+    out.explorer = explorer;
   }
   return out;
 }

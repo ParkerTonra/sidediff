@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS } from '../types';
-import { SETTINGS_KEY, createSettingsStore, type StorageLike } from './settings';
+import { DEFAULT_EXPLORER, DEFAULT_SETTINGS } from '../types';
+import { SETTINGS_KEY, createSettingsStore, defaultSettings, type StorageLike } from './settings';
+
+/** DEFAULT_SETTINGS plus the explorer defaults, which load() always fills in. */
+const DEFAULTS = { ...DEFAULT_SETTINGS, explorer: DEFAULT_EXPLORER };
 
 function memoryStorage(initial?: string): StorageLike & { data: Map<string, string> } {
   const data = new Map<string, string>();
@@ -14,7 +17,7 @@ function memoryStorage(initial?: string): StorageLike & { data: Map<string, stri
 
 describe('SettingsStore', () => {
   it('returns the defaults when nothing is stored', () => {
-    expect(createSettingsStore(memoryStorage()).load()).toEqual(DEFAULT_SETTINGS);
+    expect(createSettingsStore(memoryStorage()).load()).toEqual(DEFAULTS);
   });
 
   it('defaults to the dark theme', () => {
@@ -59,13 +62,13 @@ describe('SettingsStore', () => {
 
   it('ignores fields with the wrong type', () => {
     const raw = { theme: 'neon', language: 42, labels: { a: 7, b: '   ' }, diff: { minimap: 'yes', viewMode: 'diagonal', contextLines: 'x' } };
-    expect(createSettingsStore(memoryStorage(JSON.stringify(raw))).load()).toEqual(DEFAULT_SETTINGS);
+    expect(createSettingsStore(memoryStorage(JSON.stringify(raw))).load()).toEqual(DEFAULTS);
   });
 
   it('falls back to the defaults on corrupt JSON', () => {
-    expect(createSettingsStore(memoryStorage('{not json')).load()).toEqual(DEFAULT_SETTINGS);
-    expect(createSettingsStore(memoryStorage('null')).load()).toEqual(DEFAULT_SETTINGS);
-    expect(createSettingsStore(memoryStorage('[1,2]')).load()).toEqual(DEFAULT_SETTINGS);
+    expect(createSettingsStore(memoryStorage('{not json')).load()).toEqual(DEFAULTS);
+    expect(createSettingsStore(memoryStorage('null')).load()).toEqual(DEFAULTS);
+    expect(createSettingsStore(memoryStorage('[1,2]')).load()).toEqual(DEFAULTS);
   });
 
   it('survives blocked or full storage', () => {
@@ -78,10 +81,10 @@ describe('SettingsStore', () => {
       },
     };
     const store = createSettingsStore(throwing);
-    expect(store.load()).toEqual(DEFAULT_SETTINGS);
+    expect(store.load()).toEqual(DEFAULTS);
     expect(() => store.save(DEFAULT_SETTINGS)).not.toThrow();
     const none = createSettingsStore(null);
-    expect(none.load()).toEqual(DEFAULT_SETTINGS);
+    expect(none.load()).toEqual(DEFAULTS);
     expect(() => none.save(DEFAULT_SETTINGS)).not.toThrow();
   });
 
@@ -99,5 +102,27 @@ describe('SettingsStore', () => {
     const s = { ...store.load(), paneText: 'secret' } as unknown as typeof DEFAULT_SETTINGS;
     store.save(s);
     expect(storage.data.get(SETTINGS_KEY)).not.toContain('secret');
+  });
+
+  it('migrates stored settings that predate the explorer', () => {
+    const old: Partial<ReturnType<typeof defaultSettings>> = { ...defaultSettings(), theme: 'light', labels: { a: 'Prod', b: 'Dev' } };
+    delete old.explorer;
+    const s = createSettingsStore(memoryStorage(JSON.stringify(old))).load();
+    expect(s.explorer).toEqual(DEFAULT_EXPLORER);
+    expect(s.theme).toBe('light');
+    expect(s.labels).toEqual({ a: 'Prod', b: 'Dev' });
+  });
+
+  it('round-trips and clamps explorer settings', () => {
+    const storage = memoryStorage();
+    const store = createSettingsStore(storage);
+    const s = store.load();
+    s.explorer = { open: false, width: 420, filter: 'only-b' };
+    store.save(s);
+    expect(createSettingsStore(storage).load().explorer).toEqual({ open: false, width: 420, filter: 'only-b' });
+    const wide = createSettingsStore(memoryStorage(JSON.stringify({ explorer: { width: 5000, filter: 'bogus', open: 'yes' } }))).load();
+    expect(wide.explorer).toEqual({ ...DEFAULT_EXPLORER, width: 600 });
+    const narrow = createSettingsStore(memoryStorage(JSON.stringify({ explorer: { width: 10 } }))).load();
+    expect(narrow.explorer?.width).toBe(200);
   });
 });
