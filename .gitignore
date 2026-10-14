@@ -1,0 +1,10 @@
+node_modules/
+dist/
+dist-single/
+test-results/
+playwright-report/
+bench-results/
+fixtures/*.xml
+fixtures/*.cs
+fixtures/*.txt
+*.log
