@@ -27,7 +27,7 @@ One Monaco `DiffEditor` mounted into one container. A = original (left), B = mod
 - `setOptions(partial)`: any subset of `DiffOptions`. `diffOnly` maps to `hideUnchangedRegions` with `contextLineCount = contextLines`. `ignoreAllWhitespace` must not change the displayed text; how it is implemented is the Editor agent's call (record it in DECISIONS.md). `minimap` and `fontSize` apply to both sides.
 - `setTheme(theme)`: `dark` → `vs-dark`, `light` → `vs`.
 - `swap()`: swaps texts (labels are swapped by the UI) and emits `content` for both sides.
-- `nextChange()` / `prevChange()` / `goToChange(i)`: move both the viewport and the cursor, wrap around, and emit `position`. Works with diff-only on (it reveals the target region).
+- `nextChange()` / `prevChange()` / `goToChange(i)` (`i` is 1-based, like `ChangePosition.index`; `getPosition()` is `{0, 0}` before the first diff): move both the viewport and the cursor, wrap around, and emit `position`. Works with diff-only on (it reveals the target region).
 - `getStats()`: stats from the last completed diff, or `null`.
 - `find(side?)`: opens Monaco's find widget.
 - `getPosition()`: current `ChangePosition` (same value as the last `position` event).

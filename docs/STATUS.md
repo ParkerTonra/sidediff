@@ -4,7 +4,8 @@ Each agent keeps its own section current: **Doing**, **Done** (with what was mea
 
 ## Lead / Integrator
 - Done: Phase 0. Scaffold (Vite 8, TS 6.0 strict, ESLint 10, Vitest 5, Playwright 1.64), Monaco 0.57 DiffEditor rendered in vs-dark with its worker loaded (verified in a browser, no console errors), interfaces in `src/types.ts` + `docs/INTERFACES.md`, factory stubs in each module.
-- Doing: waiting for Phase 1; integration.
+- Done: Phase 1 closed 2026-10-14. All agents landed; `pnpm check` green (103 tests); QA `pnpm bench` all PASS; e2e 25/25 per Editor (not yet re-run by the Lead). Applied CSP `'wasm-unsafe-eval'` (f2d699a); INTERFACES.md: method semantics, `goToChange` is 1-based.
+- Next: Phase 2 (see HANDOFF.md).
 
 ## Editor and Diff Core (`src/editor/`)
 - **Done**: `createDiffEngine()` per INTERFACES.md: all 7 events, all `sidediff:*` marks, options, navigation (wraps, works with diff only), stats with the counting rule, degraded mode, paste fast path, theme, find, layout, dispose. Decisions D6 to D9 in DECISIONS.md (diff provider override, ignore-all-ws shadow models, 10 s / 30 s diff budget, features/patches). `goToChange(i)` is **1-based** like `ChangePosition.index` (Lead: please add to INTERFACES.md). `getPosition()` is `{0, 0}` before the first diff.
