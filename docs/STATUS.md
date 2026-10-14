@@ -16,7 +16,15 @@ Each agent keeps its own section current: **Doing**, **Done** (with what was mea
 - Doing: verify through `/` against the real engine + registry once `createDiffEngine` stops throwing; screenshots of the large fixture in both themes.
 
 ## Languages (`src/languages/`, `languages/`)
-- Todo: registry, bundled csharp/xml/plaintext, detect, manifest + validator + IndexedDB cache + loader, unit tests (oversized, malformed, hash mismatch), format decision in DECISIONS.md, P2 install with a real pinned pack.
+- Done (9415b3c, 4bb49ab): `createLanguageRegistry({ manifestUrl?, manifest?, fetchFn?, indexedDB?, activator? })` in `src/languages/index.ts`. Format decision = D5 (TextMate + vscode-textmate/oniguruma). Deps added and committed on their own (fe6912c): `vscode-textmate@9.3.2`, `vscode-oniguruma@2.0.1`.
+  - Bundled `csharp` "C#", `xml` "XML", `plaintext` "Plain Text"; `ensureLoaded` waits until Monaco's Monarch tokenizer really produces tokens (browser: ~15 ms each). Zero network.
+  - `detect(text)`: first 4 KB only, BOM-tolerant; first non-blank `<` → xml; `/^\s*(using|namespace)\b/m` → csharp; else null.
+  - `languages/manifest.json` (statically imported): SQL + JSON from `microsoft/vscode@1.140.0` via jsDelivr, real SHA-256s.
+  - `install(id)` per D5; every failure returns `{ ok: false, error }` with a readable message and leaves `list()`, the cache and listeners untouched. `list()` is synchronous; remote `installed` flags settle after the IndexedDB scan (one `onChange` if anything was cached).
+  - Unit tests: 61 in `src/languages/*.test.ts` (detect cases, list/get/register/onChange, install + IndexedDB key + offline cache hit in a fresh registry, concurrent install dedupe, corrupted cache entry, rejection of not-in-manifest, oversized by Content-Length and by actual bytes, malformed JSON, schema-invalid, hash mismatch, HTTP/network errors, activation failure, manifest rules). `textmate.test.ts` runs the real `onig.wasm` in node. `pnpm check` green (87 tests).
+  - Browser proof (Chromium, harness `src/languages/harness/index.html` on port 5320, same CSP as index.html plus `'wasm-unsafe-eval'`): `install('sql')` downloaded from jsDelivr, verified, highlighted in a Monaco editor (keywords/strings/numbers/comments coloured in vs-dark); reload → 0 jsDelivr requests, loaded from IndexedDB; JSON pack also highlighted; no console errors. `nowasm.html` (today's index.html CSP) → `install` returns "Could not start the grammar engine (WebAssembly blocked…)".
+  - Bundle: vscode-textmate is a lazy 25 KB gz chunk and onig.wasm a 162 KB gz asset, both fetched only when a remote pack activates.
+- Not done / for others: real-app install needs the CSP Request below. Not verified through the UI's Add-language dialog against the real app yet (UI renders it; testids `btn-install-<id>`). Single-file build path for the WASM (`data:` URL decode) is written but untested until that build exists.
 
 ## QA / Performance (`scripts/`, `fixtures/`, `tests/`)
 - **FIXTURES READY** (cf4a725). Run `pnpm fixtures` (≈5 s; `--only large` for one, `--no-verify` to skip the Monaco check). Files are gitignored, only `fixtures/*.changes.json` is committed.
@@ -30,6 +38,7 @@ Each agent keeps its own section current: **Doing**, **Done** (with what was mea
 - Todo: next pass when the Lead pings.
 
 ## Requests
+- [ ] (Languages → Lead) `index.html:5` CSP: change `script-src 'self'` to `script-src 'self' 'wasm-unsafe-eval'`. Needed for the oniguruma WASM that tokenizes remote TextMate packs (D5). Verified in Chromium: without it `WebAssembly.instantiate` is refused and `registry.install()` returns an error; with it SQL/JSON install and highlight. `'wasm-unsafe-eval'` permits WASM compilation only, not JS `eval`. No other CSP change needed (`connect-src` already allows jsDelivr; onig.wasm is same-origin).
 
 ## Bugs
 - [ ] (Reviewer → QA) `tests/e2e/smoke.spec.ts` passes against a dead app: it only listens for `pageerror`; assert no "failed to start" text and fail on `console.error`. See REVIEW.md.
@@ -37,7 +46,7 @@ Each agent keeps its own section current: **Doing**, **Done** (with what was mea
 - [ ] (Reviewer → Editor) `diff:start` must also fire on option changes that recompute the diff.
 - [x] (Reviewer → UI) `Alt+H`/`F7`/`Alt+Up/Down` must not be gated by `isTextTarget` (`src/app/dom.ts:31`), and must stop Monaco's move-line on `Alt+Up/Down`. — UI: only `?` is gated; the others are handled in the capture phase with preventDefault + stopPropagation (harness-verified from inside a textarea; re-check with Monaco).
 - [x] (Reviewer → UI) Persisted `language` may name an unavailable pack; catch `ensureLoaded` rejection at startup and fall back to `plaintext` (`src/persist/settings.ts:77`). — UI: done in `startApp` (falls back to plaintext and re-saves).
-- [ ] (Reviewer → Languages) Check size before `JSON.parse`, hash raw bytes, jsDelivr-only host; document pack format for the README.
+- [x] (Reviewer → Languages) Check size before `JSON.parse`, hash raw bytes, jsDelivr-only host; document pack format for the README. — Languages: all three done (`src/languages/validate.ts`; manifest URLs must be pinned `https://cdn.jsdelivr.net/gh/…@<tag>/…json`). Pack format, pipeline and how to add a pack are in DECISIONS.md D5; README text: add an entry to `languages/manifest.json` with the jsDelivr URL at an exact tag and the file's SHA-256 (`sha256sum`), rebuild.
 - [ ] (Reviewer → Lead) CSP `script-src 'self'` (`index.html:5`) breaks the P2 single-file build; INTERFACES.md omits `getPosition/isComputing/focus/layout/dispose` semantics.
 
 ## Ideas
