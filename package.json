@@ -17,7 +17,9 @@
     "fixtures": "node scripts/gen-fixtures.ts"
   },
   "dependencies": {
-    "monaco-editor": "0.57.0"
+    "monaco-editor": "0.57.0",
+    "vscode-oniguruma": "2.0.1",
+    "vscode-textmate": "9.3.2"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
