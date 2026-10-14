@@ -9,3 +9,5 @@ fixtures/*.cs
 fixtures/*.txt
 *.log
 .claude/next-prompt.md*
+.claude/settings.local.json
+.claude/hooks/
