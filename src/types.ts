@@ -194,6 +194,8 @@ export interface ProjectItem {
   name: string;
   /** Secondary text, e.g. "Graph extension" or the file path. */
   detail: string;
+  /** Upper-cased screen id when the item belongs to a screen (Page, File, PerTenantFile, SiteMapNode, EditorUpdatedFields). */
+  screenId?: string;
   /** Status of the default (first) view. */
   status: ItemStatus;
   /** First entry is the default view. Always includes 'xml'. */
@@ -227,8 +229,12 @@ export interface ProjectIndexer {
    * Resolves with isProject false on both sides for non-project text.
    */
   index(a: string, b: string): Promise<ProjectIndex>;
-  /** Text of one view of one item on one side, from the texts last indexed; null if absent. */
-  viewText(itemId: string, view: ItemViewKind['id'], side: Side): string | null;
+  /**
+   * Text of one view of one item on one side, from the texts last indexed;
+   * null if absent. Async because some views are decoded on demand (Page
+   * pageSource is base64 raw-deflate).
+   */
+  viewText(itemId: string, view: ItemViewKind['id'], side: Side): Promise<string | null>;
   dispose(): void;
 }
 

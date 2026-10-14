@@ -172,22 +172,28 @@ The new `AppDeps` fields (`project`, `views`, `history`) are optional until all 
 - Targets: scanning one 150k-line side takes < 500 ms in the worker; main-thread work per `index()` call < 50 ms. A newer call aborts an older one (terminate + respawn, like D11).
 - Classification is a **data table** (one entry per element name, easy to extend). Identity = the first attribute present from the element's key list, else the first of `Name, name, ScreenID, ClassName, TableName, ReportName, path, AppRelativePath, Title, Key` found on the element or its first descendants (scan at most 64 KB), else the ordinal among siblings of that element name. Unknown elements go to `other` with `name` = identity and `detail` = element name. Duplicate ids get `#2`, `#3` in document order.
 
-| Element | Group | Key attribute(s) | Name / detail | Default view |
+Verified against a real export (2026-10-14, user-supplied, 233 KB / 3,192 lines; **never copy it or its names/code into the repo, which is public**). Real exports: no `<?xml>` header, CRLF line endings, lines up to ~36k characters, attribute values may contain entities (`&quot;`, `&amp;`, `&lt;`, `&gt;`, `&apos;`, `&#…;`): decode them. Many items are self-closing.
+
+| Element | Group | Key | Name / detail / screenId | Views (default first) |
 |---|---|---|---|---|
-| `Graph` | code | `ClassName` | ClassName; detail from `FileType`: ExistingGraph → "Graph extension", NewGraph → "New graph", ExistingDac → "DAC extension", NewDac → "New DAC", else FileType | code (CDATA `Source`, csharp) |
-| `File` | code if path ends `.cs`, else files | `AppRelativePath` | file name; detail = path | code (CDATA `Content`; csharp for .cs, xml for .aspx/.xml/.config, else plaintext) |
-| `Page` | screens | `path` | screen id from the file name, upper-cased (`~/pages/so/so301000.aspx` → SO301000); detail = `ScreenTitle` or path | xml (plus a code view if it has CDATA, e.g. `pageSource`) |
-| `Table` | tables | `TableName` | TableName; detail = "N columns" | xml |
-| `Sql` | sql | `TableName`, `Name` | | code (its CDATA, plaintext) |
-| `Report`, `ReportDefinition` | reports | `ReportName`, `Name` | | code (CDATA, xml) |
-| `SiteMapNode` | sitemap | descendant `ScreenID`, `Title` | | xml |
-| `GenericInquiryScreen`, `GIDesign`, `DashboardMaintenance` | inquiries | descendant `Name`, `DesignID` | | xml |
-| `EntityEndpoint`, `XportScenario`, `ImportScenario`, `WebHook`, `BusinessEvent` | integration | `Name` (+ `Version` for endpoints) | | xml |
-| anything else | other | generic list above | `<Element> identity` | xml |
+| `Graph` | code | `ClassName` | ClassName; detail from `FileType`: ExistingGraph → "Graph extension", NewGraph → "New graph", ExistingDac → "DAC extension", NewDac → "New DAC", NewFile → "Code file", else FileType | code: CDATA `Source` (csharp, label "C#"); xml |
+| `DAC` | code | `type` | last segment of `type` after `.`/`+` (`PX.Objects.PO.POOrder` → POOrder); detail "DAC customization · N fields" | code (label "Fields", csharp): one block per `<Field>`: a line `// FieldName : TypeName (StorageName)` then the field's `TextAttributes` CDATA body, blocks separated by a blank line; xml |
+| `Page` | screens | `path` | file name without extension, upper-cased (`~/pages/po/po301000.aspx` → PO301000) = screenId; detail = "Screen customization" when it has child elements, else "Page"; `isModernUIOnlyNode="True"` → "Modern UI page" | code: `pageSource` attribute = **base64 of raw-deflate** of the full page; decode with `DecompressionStream('deflate-raw')` (label "ASPX", language xml; "HTML" for .html). When it has child elements, a second view **changes** = the element's XML (the control delta). xml always. Status: equal base64 → same without decoding |
+| `File` | code if path ends `.cs`, else files | `AppRelativePath` | file name; detail = path; screenId from a `Pages\XX\XXnnnnnn.aspx(.cs)` path. Real exports carry **no content** here (files live in the package zip): when there is no CDATA, xml view only and status compares the element | code: CDATA `Content` if present (csharp / xml / plaintext by extension); xml |
+| `PerTenantFile` | files | `AppRelativePath` | file name; detail "Modern UI file · path"; screenId from `ScreenId` | xml (reference only) |
+| `EditorUpdatedFields` | screens | `ScreenId` | "<ScreenId> editor fields"; detail "Modern UI editor metadata"; screenId | code: the **bare** CDATA directly inside the element (no `<CDATA name>` wrapper), pretty-printed with `JSON.stringify(JSON.parse(x), null, 2)` when it parses (label "JSON", plaintext, or `json` if that pack is installed); xml |
+| `Table` | tables | `TableName` | TableName; detail "N columns" (`<Column>` children) | xml |
+| `Sql` | sql | `TableName`, `Name` | detail "Table schema" | code: CDATA `TableSchemaXml` (label "Schema", xml); xml |
+| `Report`, `ReportDefinition` | reports | `ReportName`, `Name` | | code: its CDATA (xml); xml |
+| `SiteMapNode` | sitemap | first `<row>` descendant with `ScreenID` | ScreenID = screenId; detail = that row's `Title` | xml |
+| `GenericInquiryScreen`, `GIDesign`, `DashboardMaintenance` | inquiries | first `<row>` descendant with `Name` or `DesignID` | | xml |
+| `EntityEndpoint`, `XportScenario`, `ImportScenario`, `WebHook`, `BusinessEvent` | integration | `Name` (+ `Version`) | | xml |
+| anything else | other | generic list above | `<Element> identity` | xml (its CDATA as code view if any) |
 
 - `views`: `code` comes first when the element has CDATA (one section → its body; several → bodies joined with a `// ---- <name> ----` separator line), then `xml` (the element's own lines, verbatim). No CDATA → `xml` only.
 - Status compares the default view's text: identical → `same`; equal after trimming each line → `whitespace`; else `modified`. Moving an element doesn't make it differ (matching is by id, not position).
-- `viewText(id, view, side)` slices the texts from the last `index()` (the indexer keeps references; no copy until asked).
+- `viewText(id, view, side)` is async: it slices the texts from the last `index()` (the indexer keeps references) and decodes `pageSource` / pretty-prints JSON on demand, caching the last few results.
+- Line endings: views keep the source's line endings; the diff ignores CR differences the same way as for the full texts.
 
 ### Engine additions (`src/editor/`)
 
@@ -203,7 +209,7 @@ Principle: nothing new on screen until a project is loaded; then one drawer and 
   - Filter input `explorer-filter` (fuzzy on name + detail) and chips `filter-all`, `filter-changed` (default: modified + whitespace + only-a + only-b), `filter-only-a`, `filter-only-b`, each with its count.
   - Groups (`explorer-group-<group>`) in table order, collapsible; the header shows name, count and small per-status counts. Empty groups are hidden; **Other** is always last when non-empty.
   - Rows (`explorer-item`, `data-id`, `data-status`): a status glyph with colour **and** shape (`~` modified, `≈` whitespace only, `−` only in A, `+` only in B, `=` same, dimmed), the name, and a dim detail; title attribute = full key/path. The open item is highlighted. Arrow keys move, Enter opens, Home/End jump.
-- **Item view**: clicking a row calls `openView`. A breadcrumb bar (`item-bar`) appears above the panes: `← Project` (`btn-back`; also Alt+Left, and Esc when no dialog is open) · group · item name · `Code | XML` switch (`item-view-switch`, only when both exist) · `Show in project` (`btn-show-in-project`, `revealLine` on a side that has it) · `‹ ›` previous/next item in the current filter (`btn-prev-item`, `btn-next-item`, Alt+PageUp / Alt+PageDown). A missing side shows a centred hint in its pane (`missing-hint-a|b`: "Not in <label>"). Language follows the view kind; stats and change navigation describe the item. Pane headers say "read-only item view".
+- **Item view**: clicking a row calls `openView`. A breadcrumb bar (`item-bar`) appears above the panes: `← Project` (`btn-back`; also Alt+Left, and Esc when no dialog is open) · group · item name · `Code | XML` switch (`item-view-switch`, only when both exist) · `Show in project` (`btn-show-in-project`, `revealLine` on a side that has it) · **Related** (`item-related`): other items with the same `screenId` (page, its .aspx/.cs files, Modern UI files, site map entry, editor fields) as small links, so one screen's pieces are one click apart · `‹ ›` previous/next item in the current filter (`btn-prev-item`, `btn-next-item`, Alt+PageUp / Alt+PageDown). A missing side shows a centred hint in its pane (`missing-hint-a|b`: "Not in <label>"). Language follows the view kind; stats and change navigation describe the item. Pane headers say "read-only item view".
 - **Quick open** Ctrl+P (`quick-open` dialog): fuzzy search over all items regardless of filter, with status glyphs; Enter opens. Works with the drawer closed.
 - **Undo toasts**: on `history`, a toast "Undid clear of <label> · Ctrl+Y to redo". Ctrl+Z with focus outside the editors (e.g. right after clicking Clear) calls `undoReplace()`.
 - Re-index after content changes, debounced 400 ms; a small spinner in `btn-explorer` while indexing. If the open item vanished, close the view with a toast.
