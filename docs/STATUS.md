@@ -10,7 +10,10 @@ Each agent keeps its own section current: **Doing**, **Done** (with what was mea
 - Todo: DiffEngine per INTERFACES.md, worker, huge-string models, options, hideUnchangedRegions, navigation, stats, events, perf marks, degraded mode, local perf tuning against `fixtures/large-*`.
 
 ## UI / UX (`src/app/`, `src/styles/`, `src/persist/`)
-- Todo: layout, toolbar, labels, stats bar, theme, shortcuts, file load + drag-drop, paste → detect, progress, empty states, settings store, cheat sheet, P2 dialog shell. All testids from INTERFACES.md.
+- Done (7f75dcc, harness-verified; real engine not yet available): `createApp` in plain TS + DOM (`src/app/index.ts`, `dom.ts`), one CSS file `src/styles/app.css` (custom properties, dark default, light via `[data-theme=light]`), `SettingsStore` in `src/persist/settings.ts` + 10 Vitest tests (defaults, merge, clamp, wrong types, corrupt JSON, blocked/full storage, no pane text). Every testid in INTERFACES.md exists exactly once, plus P2 `btn-add-language` / `add-language-dialog` (Install buttons are `btn-install-<id>`).
+- Notes for QA: `#app` gets `data-ready="true"` once the engine is mounted and settings applied (`"error"` if startup failed). `progress` is always visible: idle shows "Ready", computing shows a spinner + "Computing diff… N vs M lines" (`data-state` per contract). `change-position` text is `no changes` or `change N of M` (N is 0 before the first navigation), also in `data-index`/`data-total`. Extra testid `diff-error` = the `diff:error` banner. Pane line/byte counts show in each pane header.
+- Dev harness: `/src/app/harness.html` on any dev server mounts the app on fakes (`src/app/dev/fakes.ts`). A Playwright script over it passed 40 checks: testids, dark default, shortcuts from inside an editor textarea (F7, Shift+F7, Alt+Up/Down, Alt+H; `?` ignored while typing, Esc closes), labels + swap, clamps, theme toggle, persistence across reload (theme, labels, options, language; no pane text in storage), startup call order mount→setTheme→setLanguage→setOptions, file picker + detect, copy, clear, drop onto a pane header, diff:error banner, degraded banner, spinner animation running while the main thread is blocked 1.5 s, add-language install success/error.
+- Doing: verify through `/` against the real engine + registry once `createDiffEngine` stops throwing; screenshots of the large fixture in both themes.
 
 ## Languages (`src/languages/`, `languages/`)
 - Todo: registry, bundled csharp/xml/plaintext, detect, manifest + validator + IndexedDB cache + loader, unit tests (oversized, malformed, hash mismatch), format decision in DECISIONS.md, P2 install with a real pinned pack.
@@ -32,8 +35,8 @@ Each agent keeps its own section current: **Doing**, **Done** (with what was mea
 - [ ] (Reviewer → QA) `tests/e2e/smoke.spec.ts` passes against a dead app: it only listens for `pageerror`; assert no "failed to start" text and fail on `console.error`. See REVIEW.md.
 - [ ] (Reviewer → Editor) `ignoreAllWhitespace` has no native Monaco option; choose an approach that leaves `getText()` unchanged and record it in DECISIONS.md. See REVIEW.md.
 - [ ] (Reviewer → Editor) `diff:start` must also fire on option changes that recompute the diff.
-- [ ] (Reviewer → UI) `Alt+H`/`F7`/`Alt+Up/Down` must not be gated by `isTextTarget` (`src/app/dom.ts:31`), and must stop Monaco's move-line on `Alt+Up/Down`.
-- [ ] (Reviewer → UI) Persisted `language` may name an unavailable pack; catch `ensureLoaded` rejection at startup and fall back to `plaintext` (`src/persist/settings.ts:77`).
+- [x] (Reviewer → UI) `Alt+H`/`F7`/`Alt+Up/Down` must not be gated by `isTextTarget` (`src/app/dom.ts:31`), and must stop Monaco's move-line on `Alt+Up/Down`. — UI: only `?` is gated; the others are handled in the capture phase with preventDefault + stopPropagation (harness-verified from inside a textarea; re-check with Monaco).
+- [x] (Reviewer → UI) Persisted `language` may name an unavailable pack; catch `ensureLoaded` rejection at startup and fall back to `plaintext` (`src/persist/settings.ts:77`). — UI: done in `startApp` (falls back to plaintext and re-saves).
 - [ ] (Reviewer → Languages) Check size before `JSON.parse`, hash raw bytes, jsDelivr-only host; document pack format for the README.
 - [ ] (Reviewer → Lead) CSP `script-src 'self'` (`index.html:5`) breaks the P2 single-file build; INTERFACES.md omits `getPosition/isComputing/focus/layout/dispose` semantics.
 
