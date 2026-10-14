@@ -1,0 +1,71 @@
+{
+  "fixture": "csharp-large",
+  "kind": "cs",
+  "seed": 1562312709,
+  "generator": "scripts/gen-fixtures.ts",
+  "a": {
+    "file": "csharp-large-a.cs",
+    "lines": 150235,
+    "bytes": 7601517,
+    "sha256": "f933348d431af18e69864d5fc2e4ff7838264db0eaa55c7f1153a075ae6dee89"
+  },
+  "b": {
+    "file": "csharp-large-b.cs",
+    "lines": 150235,
+    "bytes": 7603401,
+    "sha256": "314b6722026fadfe84e4555b967b4f98f550daa536b140ab4539adeb84d1a8bc"
+  },
+  "edits": {
+    "attrValue": 676,
+    "csToken": 789,
+    "whitespace": 564,
+    "attrReorder": 225,
+    "blockInsert": {
+      "lines": 300,
+      "beforeLineA": 95270
+    },
+    "blockDelete": {
+      "lines": 300,
+      "fromLineA": 35441
+    },
+    "move": {
+      "lines": 8,
+      "fromLineA": 14595,
+      "toBeforeLineA": 140423
+    }
+  },
+  "expected": {
+    "trimWhitespace": {
+      "added": 308,
+      "removed": 308,
+      "modified": 1690,
+      "changes": 1694
+    },
+    "noTrimWhitespace": {
+      "added": 308,
+      "removed": 308,
+      "modified": 2254,
+      "changes": 2258
+    }
+  },
+  "expectedSource": "monaco-editor@0.57.0 DefaultLinesDiffComputer (Node, maxComputationTimeMs 0)",
+  "constructed": {
+    "trimWhitespace": {
+      "added": 308,
+      "removed": 308,
+      "modified": 1690,
+      "changes": 1694
+    },
+    "noTrimWhitespace": {
+      "added": 308,
+      "removed": 308,
+      "modified": 2254,
+      "changes": 2258
+    }
+  },
+  "tolerance": {
+    "relative": 0.02,
+    "absolute": 3
+  },
+  "notes": "`lines` counts model lines (text.split(\"\\n\").length; files end with a newline, so the last model line is empty). Stats follow the DiffStats counting rule in docs/INTERFACES.md. A stat passes when |actual - expected| <= expected * relative + absolute."
+}

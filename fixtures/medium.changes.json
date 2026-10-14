@@ -1,0 +1,71 @@
+{
+  "fixture": "medium",
+  "kind": "xml",
+  "seed": 1562312706,
+  "generator": "scripts/gen-fixtures.ts",
+  "a": {
+    "file": "medium-a.xml",
+    "lines": 30007,
+    "bytes": 1749341,
+    "sha256": "c911983a658390f09432b24211687b18788e06b202aa85151798c69a1298e017"
+  },
+  "b": {
+    "file": "medium-b.xml",
+    "lines": 30007,
+    "bytes": 1749225,
+    "sha256": "7d35cd56e8a177d1e470b02e11f69c0843283a69c5304d7c2be578a0beb72bf7"
+  },
+  "edits": {
+    "attrValue": 135,
+    "csToken": 158,
+    "whitespace": 113,
+    "attrReorder": 0,
+    "blockInsert": {
+      "lines": 300,
+      "beforeLineA": 19201
+    },
+    "blockDelete": {
+      "lines": 300,
+      "fromLineA": 10908
+    },
+    "move": {
+      "lines": 11,
+      "fromLineA": 979,
+      "toBeforeLineA": 27343
+    }
+  },
+  "expected": {
+    "trimWhitespace": {
+      "added": 311,
+      "removed": 311,
+      "modified": 293,
+      "changes": 297
+    },
+    "noTrimWhitespace": {
+      "added": 311,
+      "removed": 311,
+      "modified": 406,
+      "changes": 410
+    }
+  },
+  "expectedSource": "monaco-editor@0.57.0 DefaultLinesDiffComputer (Node, maxComputationTimeMs 0)",
+  "constructed": {
+    "trimWhitespace": {
+      "added": 311,
+      "removed": 311,
+      "modified": 293,
+      "changes": 297
+    },
+    "noTrimWhitespace": {
+      "added": 311,
+      "removed": 311,
+      "modified": 406,
+      "changes": 410
+    }
+  },
+  "tolerance": {
+    "relative": 0.02,
+    "absolute": 3
+  },
+  "notes": "`lines` counts model lines (text.split(\"\\n\").length; files end with a newline, so the last model line is empty). Stats follow the DiffStats counting rule in docs/INTERFACES.md. A stat passes when |actual - expected| <= expected * relative + absolute."
+}
