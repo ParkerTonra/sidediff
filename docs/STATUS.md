@@ -16,7 +16,11 @@ Each agent keeps its own section current: **Doing**, **Done** (with what was mea
 - Todo: registry, bundled csharp/xml/plaintext, detect, manifest + validator + IndexedDB cache + loader, unit tests (oversized, malformed, hash mismatch), format decision in DECISIONS.md, P2 install with a real pinned pack.
 
 ## QA / Performance (`scripts/`, `fixtures/`, `tests/`)
-- Todo (first): `scripts/gen-fixtures.ts` → small/medium/large/stress/csharp-large pairs + `*.changes.json`. Then `pnpm bench` (perf gate, section 8), e2e for section 9, unit tests.
+- **FIXTURES READY** (cf4a725). Run `pnpm fixtures` (≈5 s; `--only large` for one, `--no-verify` to skip the Monaco check). Files are gitignored, only `fixtures/*.changes.json` is committed.
+  - `small` 2,265 lines / 0.11 MB · `medium` 30,007 / 1.7 MB · `large` 150,115 / 8.7 MB · `stress` 500,295 / 28.7 MB (degraded by lines) · `csharp-large` 150,235 / 7.3 MB (`.cs`).
+  - `expected.trimWhitespace` / `expected.noTrimWhitespace` in each sidecar come from Monaco 0.57's own `DefaultLinesDiffComputer` run in Node (maxComputationTimeMs 0) and equal the stats derived from the edit list exactly. Large, trim on: added 311, removed 311, modified 1474, changes 1478; trim off: modified 2037, changes 2041. Tolerance: `|actual − expected| ≤ 2% + 3`.
+  - Edits on B: ~1.5% scattered single-line edits (attribute value, single C# token, leading/trailing whitespace, attribute/named-arg reorder), each ≥12 unchanged lines apart so hunks never merge, plus one 300-line insert, one 300-line delete (both inside CDATA/class bodies), one moved `<Table>`/`<Page>` element (C#: a moved member). `small` uses 100-line blocks.
+- Doing: `pnpm bench`, then e2e for section 9, unit tests.
 
 ## Reviewer / Docs (`docs/REVIEW.md`, `README.md` drafts, `docs/SHORTCUTS.md`)
 - Done (pass 1): `docs/SHORTCUTS.md`, `docs/README.draft.md` (language-pack details and bench numbers are placeholders), `docs/REVIEW.md`. Ran: dev server + Playwright (stub app shows the startup error, no cross-origin requests). Read only: persist/dom helpers, CSP, ESLint config. Not reviewable yet: engine, registry, app shell, CSS contrast, bundle audit (nothing imports Monaco yet), bench.
