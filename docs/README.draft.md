@@ -67,12 +67,14 @@ Shortcuts are listed in [SHORTCUTS.md](SHORTCUTS.md) and in the app under `?`.
 
 ## Adding a language pack
 
-> To be completed from the Languages session's documentation (format, schema, manifest tooling). The contract so far:
+Bundled languages (`csharp`, `xml`, `plaintext`) need no network. Every other language is a *data-only* TextMate grammar (`.tmLanguage.json`) listed in `languages/manifest.json`. The app never downloads or runs JavaScript: grammars are tokenized by `vscode-textmate` with the `vscode-oniguruma` WASM that ships with the app (decision D5).
 
-Bundled languages (`csharp`, `xml`, `plaintext`) need no network. Other languages are *data-only* packs listed in `languages/manifest.json`; the app never downloads or runs JavaScript. To add one:
+**Installing a listed pack (users):** click **+ Language**, then **Install** next to SQL or JSON. The pack is fetched from its pinned jsDelivr URL, checked, cached in IndexedDB and works offline from then on. Pick it in the **Language** menu.
 
-1. Choose a pinned tag of a public, MIT-licensed repository and an exact file URL, preferably `https://cdn.jsdelivr.net/gh/microsoft/vscode@<exact-tag>/extensions/<lang>/syntaxes/<lang>.tmLanguage.json`.
-2. Download the file and compute its SHA-256 (`certutil -hashfile file.json SHA256` on Windows).
+**Adding a new pack to the allowlist (developers):**
+
+1. Pick a grammar from a public MIT repository at an exact tag or commit, for example `https://cdn.jsdelivr.net/gh/microsoft/vscode@1.140.0/extensions/<lang>/syntaxes/<lang>.tmLanguage.json`. Branches and `@latest` are rejected.
+2. Download the file and compute its SHA-256 over the raw bytes (`certutil -hashfile <file> SHA256`, or `sha256sum`).
 3. Add an entry to `languages/manifest.json`:
 
    ```json
@@ -81,36 +83,38 @@ Bundled languages (`csharp`, `xml`, `plaintext`) need no network. Other language
      "displayName": "SQL",
      "format": "tmlanguage-json",
      "license": "MIT",
-     "url": "https://cdn.jsdelivr.net/gh/microsoft/vscode@<exact-tag>/extensions/sql/syntaxes/sql.tmLanguage.json",
-     "sha256": "<hex>"
+     "url": "https://cdn.jsdelivr.net/gh/microsoft/vscode@1.140.0/extensions/sql/syntaxes/sql.tmLanguage.json",
+     "sha256": "<64 hex characters>"
    }
    ```
 
-   `format` is `tmlanguage-json` or `monarch-json` (TODO: final choice per DECISIONS.md).
-4. Rebuild. The pack appears in the **Add language** dialog. Installing validates it (under 2 MB, valid JSON, matches the schema, SHA-256 equals the manifest) and caches it in IndexedDB keyed by `id@sha256`, so it works offline afterwards. A failed check shows a message and changes nothing.
+   Rules enforced in code: the id is not a bundled id, `license` is `MIT`, the URL is `https://cdn.jsdelivr.net/gh/<owner>/<repo>@<semver tag or 40-char sha>/....json`, the hash is 64 hex characters.
+4. Rebuild. The manifest is compiled into the bundle, so the allowlist is fixed at build time and the new pack shows up in the **+ Language** dialog.
 
-There is no URL field: only manifest entries can be fetched, and the page CSP allows `connect-src` to `https://cdn.jsdelivr.net` only.
+Install pipeline: fetch (no credentials, no redirects, 30 s timeout) -> under 2 MB by `Content-Length` and by streamed byte count -> UTF-8 -> `JSON.parse` -> TextMate schema check -> SHA-256 equals the manifest value -> compile the grammar (bad regexes fail here) -> cache under `id@sha256` in IndexedDB -> register. Any failure shows a message and leaves the registry unchanged. Cached packs are re-verified on every load. There is no URL field, and the page CSP allows `connect-src` to `https://cdn.jsdelivr.net` only. The CSP also carries `'wasm-unsafe-eval'` (WebAssembly compilation only, not JS `eval`) for the oniguruma WASM.
 
 ## Engine decision
 
 SideDiff uses Monaco Editor's `DiffEditor` (`monaco-editor` 0.57, pinned). It computes the diff in a web worker, has a built-in `hideUnchangedRegions` (the "diff only" feature), intra-line highlighting, side-by-side and inline modes, change navigation and `vs`/`vs-dark` themes, and ships Monarch tokenizers for C# and XML. Only the editor API plus the C# and XML registrations are imported (never the `monaco-editor` barrel), which keeps the bundle to those two language chunks.
 
-The fallback, if Monaco had missed the performance gate, was CodeMirror 6 with `@codemirror/merge`. Outcome: _TBD from `pnpm bench`_.
+The fallback, if Monaco had missed the performance gate, was CodeMirror 6 with `@codemirror/merge`. Outcome: Monaco passes every gate with a wide margin, so the fallback was not needed. The engine owns Monaco's diff provider (D6), implements "ignore all whitespace" with hidden whitespace-stripped shadow models so the visible text never changes (D7), and uses a 10 s diff budget (30 s when degraded), after which Monaco returns an approximate result and the stats bar says so (D8).
 
 ## Performance gate
 
-Measured by `pnpm bench` in headless Chromium on the 150k-line `large` pair. Results: _placeholders until the bench reports._
+Measured by `pnpm bench` in headless Chromium on the 150k-line `large` pair (8.7 MB), loaded through the real file inputs. Run recorded in `bench-results/` on 2026-10-14; all PASS.
 
 | Check | Limit | Measured |
 |---|---|---|
-| One 150k-line side to first render | < 2 s | _TBD_ |
-| Diff ready, both sides | target < 5 s, hard < 10 s | _TBD_ |
-| Longest main-thread block during diff | <= 200 ms | _TBD_ |
-| Toggle "diff only" | < 1 s | _TBD_ |
-| Worst frame in a 5 s scripted scroll | <= 100 ms | _TBD_ |
-| Tab memory after diff | < 2 GB | _TBD_ |
-| `stress` pair (500k lines) | no crash, warning shown, finishes or reports within 60 s | _TBD_ |
-| Initial JS, gzipped | < 3 MB (warning only) | _TBD_ |
+| One 150k-line side to first render | < 2 s | 123 ms (A), 135 ms (B) |
+| Diff ready, both sides | target < 5 s, hard < 10 s | 0.84 s |
+| Longest main-thread block during diff | <= 200 ms | 0 ms (92 ms worst, during load) |
+| Toggle "diff only" on / off | < 1 s | 310 / 87 ms |
+| Worst frame in a 5 s scripted scroll | <= 100 ms | 17 ms |
+| Tab memory after diff | < 2 GB | 442 MB renderer, 48 MB JS heap |
+| `stress` pair (500k lines) | no crash, warning shown, finishes or reports within 60 s | done in 2.9 s, degraded warning shown |
+| Initial JS, gzipped | < 3 MB (warning only) | 0.78 MB; lazy chunks: csharp, xml only |
+
+Two unrelated 150k-line files (every line differs) hit the diff budget and return an approximate result after about 10 s.
 
 ## Privacy
 
