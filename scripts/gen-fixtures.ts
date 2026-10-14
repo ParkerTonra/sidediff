@@ -126,12 +126,15 @@ function writeProject(): void {
     b: side('project-b.xml', p.b, p.root.b),
     counts: p.counts,
     cdataSplit: p.cdataSplit,
+    relatedScreen: p.relatedScreen,
+    pageSource: p.pageSource,
     edits: p.edits,
     items: p.items,
     notes:
-      'Expected items follow docs/INTERFACES.md "Project explorer": id = `${element}:${identity}` (#2 for duplicates in document order), ' +
+      'Shaped like a real export: no <?xml> header, CRLF line endings, entities in attributes, self-closing items, pageSource = base64(raw deflate(ASPX)). ' +
+      'Expected items follow docs/INTERFACES.md "Project explorer": id = `${element}:${identity}` (EntityEndpoint: Name@Version; #2 for duplicates in document order), ' +
       'group from the classification table, status from the default view (CDATA bodies when present, else the element lines). ' +
-      '`detail` null = unspecified by the contract. EntityEndpoint identity is its Name attribute; the app may also show Version. ' +
+      '`detail` null = unspecified by the contract or different per side. `lines` = text.split("\n").length. ' +
       'Items are sorted by group order, then name. Line ranges are 1-based inclusive.',
   };
   writeFileSync(join(OUT, 'project.changes.json'), JSON.stringify(sidecar, null, 2) + '\n');

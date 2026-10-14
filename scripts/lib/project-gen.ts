@@ -1,32 +1,46 @@
 // Deterministic Acumatica project.xml pair for the project explorer
-// (docs/INTERFACES.md "Project explorer and whole-text undo"). Pure.
+// (docs/INTERFACES.md "Project explorer and whole-text undo"). Pure apart from
+// node:zlib (Page pageSource is base64 of raw-deflate, as in real exports).
 //
-// Each item is built as a small element model; B is a mutated copy. The
-// expected item list (id, group, status, ...) is derived from the models with
-// the contract's rules, so the sidecar never depends on the app's scanner.
+// Shaped like a real export: no <?xml> header, CRLF line endings, very long
+// attribute lines, entities in attribute values, self-closing items. Each item
+// is a small element model; B is a mutated copy. The expected item list (id,
+// group, status, ...) is derived from the models with the contract's rules, so
+// the sidecar never depends on the app's scanner. All names are invented.
 
+import { deflateRawSync } from 'node:zlib';
 import { createRng } from './rng.ts';
 import type { Rng } from './rng.ts';
 import { csharpUnit, mutateLine } from './fixture-gen.ts';
 import type { ItemStatus, ProjectGroup } from '../../src/types.ts';
 
 export const PROJECT_SEED = 0x5d1f_0100;
+export const EOL = '\r\n';
 
-type Part = { kind: 'lines'; lines: string[] } | { kind: 'cdata'; name: string; body: string[] };
+type Part =
+  | { kind: 'lines'; lines: string[] }
+  | { kind: 'cdata'; name: string; body: string[]; indent?: string }
+  /** CDATA directly inside the element, no <CDATA name> wrapper (EditorUpdatedFields). */
+  | { kind: 'bare'; body: string[] }
+  /** A <Field> of a <DAC>, with an optional TextAttributes CDATA. */
+  | { kind: 'field'; attrs: [string, string][]; body: string[] | null };
 
 interface El {
   tag: string;
   attrs: [string, string][];
   parts: Part[];
+  /** Page only: the ASPX that pageSource encodes. */
+  aspx?: string[];
 }
 
 interface Item {
-  /** Identity per the contract's key rules (before duplicate suffixes). */
   key: string;
+  /** Overrides `${tag}:${key}` (EntityEndpoint name@version). */
+  idBase?: string;
   group: ProjectGroup;
   name: string;
-  /** null when the contract leaves it unspecified. */
   detail: string | null;
+  screenId?: string;
   a: El | null;
   b: El | null;
 }
@@ -37,10 +51,12 @@ export interface ExpectedItem {
   key: string;
   group: ProjectGroup;
   name: string;
+  /** null when the contract leaves it open or it depends on the side. */
   detail: string | null;
+  screenId: string | null;
   status: ItemStatus;
-  views: ('code' | 'xml')[];
-  /** 1-based inclusive element line ranges in each file, null when absent. */
+  views: ('code' | 'changes' | 'xml')[];
+  /** 1-based inclusive element line ranges, null when absent on that side. */
   a: { startLine: number; endLine: number } | null;
   b: { startLine: number; endLine: number } | null;
 }
@@ -53,6 +69,10 @@ export interface ProjectPair {
   counts: { total: number; byStatus: Record<ItemStatus, number>; byGroup: Partial<Record<ProjectGroup, number>> };
   /** Item whose CDATA is split around "]]>", and a string its joined code must contain. */
   cdataSplit: { id: string; mustContain: string };
+  /** Screen with a Page, .aspx/.aspx.cs Files, PerTenantFiles, a SiteMapNode and EditorUpdatedFields. */
+  relatedScreen: { screenId: string; ids: string[] };
+  /** A Page whose decoded pageSource must contain this text. */
+  pageSource: { id: string; mustContain: string };
   edits: Record<string, string[]>;
 }
 
@@ -60,44 +80,81 @@ export const GROUP_ORDER: readonly ProjectGroup[] = ['code', 'screens', 'tables'
 
 // ---------------------------------------------------------------- rendering
 
-const escAttr = (v: string): string => v.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+const escAttr = (v: string): string => v.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const attrs = (list: [string, string][]): string => list.map(([k, v]) => ` ${k}="${escAttr(v)}"`).join('');
+/** A literal "]]>" in a CDATA body is split as "]]]]><![CDATA[>" (what the exporter writes). */
+const encCdata = (l: string): string => l.replace(/\]\]>/g, ']]]]><![CDATA[>');
 
-/** CDATA body lines; a literal "]]>" is split as "]]]]><![CDATA[>" (what Acumatica writes). */
-function cdataLines(name: string, body: string[]): string[] {
-  const enc = body.map((l) => l.replace(/\]\]>/g, ']]]]><![CDATA[>'));
-  return [`    <CDATA name="${name}"><![CDATA[${enc[0] ?? ''}`, ...enc.slice(1), ']]></CDATA>'];
+function cdataLines(name: string, body: string[], indent = '    '): string[] {
+  const enc = body.map(encCdata);
+  return [`${indent}<CDATA name="${name}"><![CDATA[${enc[0] ?? ''}`, ...enc.slice(1), ']]></CDATA>'];
 }
 
+const pageSource = (aspx: string[]): string => deflateRawSync(Buffer.from(aspx.join(EOL), 'utf8'), { level: 9 }).toString('base64');
+
 function render(el: El): string[] {
-  const attrs = el.attrs.map(([k, v]) => ` ${k}="${escAttr(v)}"`).join('');
-  const out = [`<${el.tag}${attrs}>`];
-  for (const p of el.parts) out.push(...(p.kind === 'lines' ? p.lines : cdataLines(p.name, p.body)));
+  const list: [string, string][] = el.aspx ? [...el.attrs, ['pageSource', pageSource(el.aspx)]] : el.attrs;
+  if (el.parts.length === 0) return [`<${el.tag}${attrs(list)} />`];
+  const out = [`<${el.tag}${attrs(list)}>`];
+  for (const p of el.parts) {
+    if (p.kind === 'lines') out.push(...p.lines);
+    else if (p.kind === 'cdata') out.push(...cdataLines(p.name, p.body, p.indent));
+    else if (p.kind === 'bare') {
+      const enc = p.body.map(encCdata);
+      out.push(`    <![CDATA[${enc[0] ?? ''}`, ...enc.slice(1));
+      out[out.length - 1] += ']]>';
+    } else if (p.body === null) out.push(`    <Field${attrs(p.attrs)} />`);
+    else out.push(`    <Field${attrs(p.attrs)}>`, ...cdataLines('TextAttributes', p.body, '        '), '    </Field>');
+  }
   out.push(`</${el.tag}>`);
   return out;
 }
 
 const clone = (el: El): El => JSON.parse(JSON.stringify(el)) as El;
-const attr = (el: El, k: string): string | undefined => el.attrs.find(([n]) => n === k)?.[1];
+const getAttr = (list: [string, string][], k: string): string => list.find(([n]) => n === k)?.[1] ?? '';
 const setAttr = (el: El, k: string, v: string): void => {
   const a = el.attrs.find(([n]) => n === k);
   if (a) a[1] = v;
   else el.attrs.push([k, v]);
 };
-const cdatas = (el: El): Extract<Part, { kind: 'cdata' }>[] => el.parts.filter((p): p is Extract<Part, { kind: 'cdata' }> => p.kind === 'cdata');
+type CdataPart = Extract<Part, { kind: 'cdata' }>;
+const cdatas = (el: El): CdataPart[] => el.parts.filter((p): p is CdataPart => p.kind === 'cdata');
 
-/** Default view text per the contract: CDATA bodies when present, else the element's lines. */
-function defaultView(el: El): { kind: 'code' | 'xml'; text: string[] } {
+/** The default view's text per the contract (line arrays; CR differences don't matter). */
+function defaultView(el: El): string[] {
+  if (el.tag === 'Page') return el.aspx ?? render(el);
+  if (el.tag === 'DAC') {
+    const blocks = el.parts.flatMap((p) =>
+      p.kind === 'field' ? [[`// ${getAttr(p.attrs, 'FieldName')} : ${getAttr(p.attrs, 'TypeName')} (${getAttr(p.attrs, 'StorageName')})`, ...(p.body ?? [])]] : [],
+    );
+    return blocks.flatMap((b, i) => (i === 0 ? b : ['', ...b]));
+  }
+  if (el.tag === 'EditorUpdatedFields') {
+    const bare = el.parts.find((p): p is Extract<Part, { kind: 'bare' }> => p.kind === 'bare');
+    const raw = (bare?.body ?? []).join('\n');
+    try {
+      return JSON.stringify(JSON.parse(raw), null, 2).split('\n');
+    } catch {
+      return raw.split('\n');
+    }
+  }
   const c = cdatas(el);
-  if (c.length === 0) return { kind: 'xml', text: render(el) };
-  if (c.length === 1) return { kind: 'code', text: c[0]?.body ?? [] };
-  return { kind: 'code', text: c.flatMap((x) => [`// ---- ${x.name} ----`, ...x.body]) };
+  if (c.length === 0) return render(el);
+  if (c.length === 1) return c[0]?.body ?? [];
+  return c.flatMap((x) => [`// ---- ${x.name} ----`, ...x.body]);
+}
+
+function views(el: El): ExpectedItem['views'] {
+  if (el.tag === 'Page') return el.parts.length ? ['code', 'changes', 'xml'] : ['code', 'xml'];
+  if (el.tag === 'DAC' || el.tag === 'EditorUpdatedFields') return ['code', 'xml'];
+  return cdatas(el).length ? ['code', 'xml'] : ['xml'];
 }
 
 function status(a: El | null, b: El | null): ItemStatus {
   if (!a) return 'only-b';
   if (!b) return 'only-a';
-  const x = defaultView(a).text;
-  const y = defaultView(b).text;
+  const x = defaultView(a);
+  const y = defaultView(b);
   if (x.join('\n') === y.join('\n')) return 'same';
   if (x.length === y.length && x.every((l, i) => l.trim() === (y[i] ?? '').trim())) return 'whitespace';
   return 'modified';
@@ -108,13 +165,42 @@ function status(a: El | null, b: El | null): ItemStatus {
 const WORDS = ['Order', 'Customer', 'Inventory', 'Vendor', 'Shipment', 'Freight', 'Margin', 'Rebate', 'Contract', 'Approval', 'Credit', 'Batch', 'Route', 'Carrier', 'Region', 'Commission', 'Allocation', 'Backorder', 'Warranty', 'Lot'];
 const GRAPHS = ['SOOrderEntry', 'POOrderEntry', 'ARInvoiceEntry', 'APInvoiceEntry', 'INReceiptEntry', 'InventoryItemMaint', 'CustomerMaint', 'ProjectEntry', 'SOShipmentEntry', 'CRCaseMaint'];
 const DACS = ['SOOrder', 'SOLine', 'POOrder', 'POLine', 'ARInvoice', 'APInvoice', 'INTran', 'InventoryItem', 'BAccount', 'PMTask', 'SOShipment', 'CRCase'];
+const DAC_NS: Record<string, string> = { SO: 'PX.Objects.SO', PO: 'PX.Objects.PO', AR: 'PX.Objects.AR', AP: 'PX.Objects.AP', IN: 'PX.Objects.IN', BA: 'PX.Objects.CR', PM: 'PX.Objects.PM', CR: 'PX.Objects.CR' };
 const MODS = ['so', 'po', 'ar', 'ap', 'in', 'pm', 'cr'];
 const FILE_TYPES: [string, string][] = [
   ['ExistingGraph', 'Graph extension'],
   ['NewGraph', 'New graph'],
   ['ExistingDac', 'DAC extension'],
   ['NewDac', 'New DAC'],
+  ['NewFile', 'Code file'],
 ];
+export const RELATED_SCREEN = 'SO301000';
+
+const guid = (rng: Rng): string => {
+  const h = (n: number): string => Array.from({ length: n }, () => '0123456789abcdef'.charAt(rng.int(0, 15))).join('');
+  return `${h(8)}-${h(4)}-${h(4)}-${h(4)}-${h(12)}`;
+};
+
+function aspxPage(rng: Rng, screen: string, controls: number): string[] {
+  const graph = rng.pick(GRAPHS);
+  const out = [
+    `<%@ Page Language="C#" MasterPageFile="~/MasterPages/FormDetail.master" AutoEventWireup="true" ValidateRequest="false" CodeFile="${screen}.aspx.cs" Inherits="Page_${screen}" Title="Untitled Page" %>`,
+    '<%@ MasterType VirtualPath="~/MasterPages/FormDetail.master" %>',
+    '<asp:Content ID="cont1" ContentPlaceHolderID="phDS" runat="Server">',
+    `    <px:PXDataSource ID="ds" runat="server" Visible="True" Width="100%" TypeName="PX.Objects.${screen.slice(0, 2)}.${graph}" PrimaryView="Document">`,
+    '    </px:PXDataSource>',
+    '</asp:Content>',
+    '<asp:Content ID="cont2" ContentPlaceHolderID="phF" runat="Server">',
+    '    <px:PXFormView ID="form" runat="server" DataSourceID="ds" Width="100%" DataMember="Document">',
+    '        <Template>',
+  ];
+  for (let i = 0; i < controls; i++) {
+    const f = `Usr${rng.pick(WORDS)}${rng.pick(WORDS)}${i}`;
+    out.push(`            <px:PX${rng.pick(['TextEdit', 'NumberEdit', 'CheckBox', 'Selector', 'DateTimeEdit'])} ID="ed${f}" runat="server" DataField="${f}" CommitChanges="True" />`);
+  }
+  out.push('        </Template>', '    </px:PXFormView>', '</asp:Content>');
+  return out;
+}
 
 function columns(rng: Rng, table: string, n: number, salt: string): string[] {
   return Array.from({ length: n }, (_, i) => {
@@ -124,25 +210,22 @@ function columns(rng: Rng, table: string, n: number, salt: string): string[] {
   });
 }
 
-function sqlBody(rng: Rng, table: string, n: number): string[] {
-  const cols = Array.from({ length: n }, (_, i) => `    [Usr${rng.pick(WORDS)}${i}] ${rng.pick(['NVARCHAR(50)', 'DECIMAL(19,6)', 'INT', 'BIT', 'DATETIME'])} NULL,`);
+function schemaXml(rng: Rng, table: string, n: number): string[] {
   return [
-    `IF NOT EXISTS (SELECT * FROM sys.objects WHERE name = '${table}')`,
-    'BEGIN',
-    `  CREATE TABLE [dbo].[${table}] (`,
-    '    [CompanyID] INT NOT NULL,',
-    '    [RecordID] INT IDENTITY(1,1) NOT NULL,',
-    ...cols,
-    '    [tstamp] TIMESTAMP NOT NULL,',
-    `    CONSTRAINT [PK_${table}] PRIMARY KEY CLUSTERED ([CompanyID], [RecordID])`,
-    '  )',
-    'END',
-    'GO',
+    `<table name="${table}">`,
+    '  <col name="CompanyID" type="Int" default="Zero" />',
+    '  <col name="RecordID" type="Int" identity="true" />',
+    ...Array.from({ length: n }, (_, i) => `  <col name="Usr${rng.pick(WORDS)}${i}" type="${rng.pick(['NVarChar(50)', 'Decimal(19,6)', 'Int', 'Bit', 'DateTime'])}" nullable="true" />`),
+    '  <col name="tstamp" type="Timestamp" />',
+    `  <index name="${table}_PK" clustered="true" isPrimary="true">`,
+    '    <col name="CompanyID" />',
+    '    <col name="RecordID" />',
+    '  </index>',
+    '</table>',
   ];
 }
 
 function reportBody(rng: Rng, name: string, n: number): string[] {
-  const fields = Array.from({ length: n }, (_, i) => `      <TextBox Name="textBox${i}" Left="${rng.int(0, 600)}px" Top="${rng.int(0, 40)}px" Value="=[${rng.pick(DACS)}.Usr${rng.pick(WORDS)}]" />`);
   return [
     '<?xml version="1.0" encoding="utf-8"?>',
     `<Report Name="${name}">`,
@@ -152,7 +235,7 @@ function reportBody(rng: Rng, name: string, n: number): string[] {
     '  <Sections>',
     '    <PageHeader Name="pageHeaderSection1" Height="56px">',
     '      <Items>',
-    ...fields,
+    ...Array.from({ length: n }, (_, i) => `        <TextBox Name="textBox${i}" Left="${rng.int(0, 600)}px" Top="${rng.int(0, 40)}px" Value="=[${rng.pick(DACS)}.Usr${rng.pick(WORDS)}]" />`),
     '      </Items>',
     '    </PageHeader>',
     '  </Sections>',
@@ -160,7 +243,8 @@ function reportBody(rng: Rng, name: string, n: number): string[] {
   ];
 }
 
-function dataSet(mainTable: string, rows: string[]): string[] {
+/** A data-set (site map, generic inquiry): relations, layout and nested <row> data. */
+function dataSet(mainTable: string, data: string[]): string[] {
   return [
     '    <data-set>',
     `        <relations format-version="3" relations-version="20240201" main-table="${mainTable}">`,
@@ -170,125 +254,147 @@ function dataSet(mainTable: string, rows: string[]): string[] {
     `            <table name="${mainTable}" />`,
     '        </layout>',
     '        <data>',
-    `            <${mainTable}>`,
-    ...rows.map((r) => `                ${r}`),
-    `            </${mainTable}>`,
+    ...data.map((r) => `            ${r}`),
     '        </data>',
     '    </data-set>',
   ];
 }
 
-const guid = (rng: Rng): string => {
-  const h = (n: number): string => Array.from({ length: n }, () => '0123456789abcdef'.charAt(rng.int(0, 15))).join('');
-  return `${h(8)}-${h(4)}-${h(4)}-${h(4)}-${h(12)}`;
-};
+function siteMapRows(rng: Rng, screen: string, title: string): string[] {
+  return ['<SiteMap>', `    <row Position="${rng.int(1, 900)}" Title="${escAttr(title)}" Url="~/Pages/${screen.slice(0, 2)}/${screen}.aspx" ScreenID="${screen}" NodeID="${guid(rng)}" ParentID="${guid(rng)}" />`, '</SiteMap>'];
+}
 
 // ---------------------------------------------------------------- items
 
 function buildItems(rng: Rng): Item[] {
   const items: Item[] = [];
-  const add = (key: string, group: ProjectGroup, name: string, detail: string | null, a: El): Item => {
-    const item: Item = { key, group, name, detail, a, b: clone(a) };
+  const add = (it: Omit<Item, 'b'>): Item => {
+    const item: Item = { ...it, b: it.a ? clone(it.a) : null };
     items.push(item);
     return item;
   };
 
-  // Graphs (code), all FileTypes, C# in CDATA "Source".
-  for (let i = 0; i < 50; i++) {
-    const [fileType, detail] = FILE_TYPES[i % 7 === 3 ? 1 : i % 7 === 5 ? 2 : i % 11 === 6 ? 3 : 0] as [string, string];
+  // Graphs: all FileTypes, C# in CDATA "Source".
+  for (let i = 0; i < 54; i++) {
+    const t = i % 9 === 3 ? 1 : i % 9 === 5 ? 2 : i % 13 === 6 ? 3 : i % 17 === 8 ? 4 : 0;
+    const [fileType, detail] = FILE_TYPES[t] as [string, string];
     const cls = fileType.endsWith('Dac') ? `${rng.pick(DACS)}Ext_${rng.pick(WORDS)}${i}` : `${rng.pick(GRAPHS)}_${rng.pick(WORDS)}Ext${i}`;
-    const body = csharpUnit(PROJECT_SEED + 1000 + i, rng.int(80, 400));
-    add(cls, 'code', cls, detail, {
-      tag: 'Graph',
-      attrs: [['ClassName', cls], ['Source', '#CDATA'], ['IsNew', fileType.startsWith('New') ? 'True' : 'False'], ['FileType', fileType]],
-      parts: [{ kind: 'cdata', name: 'Source', body }],
+    add({
+      key: cls, group: 'code', name: cls, detail,
+      a: { tag: 'Graph', attrs: [['ClassName', cls], ['Source', '#CDATA'], ['IsNew', fileType.startsWith('New') ? 'True' : 'False'], ['FileType', fileType]], parts: [{ kind: 'cdata', name: 'Source', body: csharpUnit(PROJECT_SEED + 1000 + i, rng.int(80, 400)) }] },
     });
   }
-  // Files: .cs (code) and others (files).
-  for (let i = 0; i < 30; i++) {
+  // DAC customizations: <Field>s with TextAttributes CDATA (one self-closing).
+  for (let i = 0; i < 6; i++) {
+    const dac = DACS[(i * 5) % DACS.length] ?? 'SOOrder';
+    const type = `${DAC_NS[dac.slice(0, 2).toUpperCase()] ?? 'PX.Objects.CS'}.${dac}`;
+    const parts: Part[] = Array.from({ length: rng.int(2, 7) }, (_, k): Part => {
+      const f = `Usr${rng.pick(WORDS)}${k}`;
+      const typeName = rng.pick(['string', 'decimal?', 'int?', 'bool?']);
+      const storage = rng.chance(0.75) ? 'DBTableColumn' : 'NonDB';
+      const body = k === 1 && i === 2 ? null : [`[PXDB${typeName === 'string' ? 'String(30, IsUnicode = true)' : 'Decimal(4)'}]`, `[PXUIField(DisplayName = "${f.slice(3)}", Visibility = PXUIVisibility.SelectorVisible)]`];
+      return { kind: 'field', attrs: [['FieldName', f], ['TypeName', typeName], ['StorageName', storage]], body };
+    });
+    add({ key: type, group: 'code', name: dac, detail: `DAC customization · ${parts.length} fields`, a: { tag: 'DAC', attrs: [['type', type]], parts } });
+  }
+  // Files with C# content (code).
+  for (let i = 0; i < 26; i++) {
     const nm = `${rng.pick(DACS)}${rng.pick(WORDS)}${i}`;
     const path = `App_Code\\Caches\\${nm}.cs`;
-    add(path, 'code', `${nm}.cs`, path, {
-      tag: 'File',
-      attrs: [['AppRelativePath', path]],
-      parts: [{ kind: 'cdata', name: 'Content', body: csharpUnit(PROJECT_SEED + 2000 + i, rng.int(60, 320)) }],
-    });
+    add({ key: path, group: 'code', name: `${nm}.cs`, detail: path, a: { tag: 'File', attrs: [['AppRelativePath', path]], parts: [{ kind: 'cdata', name: 'Content', body: csharpUnit(PROJECT_SEED + 2000 + i, rng.int(60, 320)) }] } });
   }
-  const other: [string, string[]][] = [
-    ['Pages\\SO\\SO301000Ext.aspx', ['<%@ Page Language="C#" MasterPageFile="~/MasterPages/FormDetail.master" %>', '<asp:Content ID="cont1" ContentPlaceHolderID="phDS" runat="Server">', '    <px:PXDataSource ID="ds" runat="server" TypeName="PX.Objects.SO.SOOrderEntry" PrimaryView="Document" />', '</asp:Content>']],
+  // Files with non-C# content (files).
+  const withContent: [string, string[]][] = [
     ['Web.config.transform', ['<configuration>', '  <appSettings>', '    <add key="ContosoFeatureFlag" value="true" />', '  </appSettings>', '</configuration>']],
     ['Scripts\\contoso-grid.js', ['(function () {', "  'use strict';", '  window.contosoGrid = { pageSize: 50 };', '})();']],
-    ['Docs\\README.txt', ['Contoso customization', 'Install after the base 24R2 update.']],
+    ['Docs\\README.txt', ['Contoso customization', 'Install after the base update.']],
   ];
-  for (const [path, body] of other) {
-    const nm = path.split('\\').pop() ?? path;
-    add(path, 'files', nm, path, { tag: 'File', attrs: [['AppRelativePath', path]], parts: [{ kind: 'cdata', name: 'Content', body }] });
+  for (const [path, body] of withContent) {
+    add({ key: path, group: 'files', name: path.split('\\').pop() ?? path, detail: path, a: { tag: 'File', attrs: [['AppRelativePath', path]], parts: [{ kind: 'cdata', name: 'Content', body }] } });
   }
-  // Pages (screens). One carries a CDATA pageSource.
+  // Content-less file references, as in real exports (the files live in the zip).
+  for (const path of [`Pages\\SO\\${RELATED_SCREEN}.aspx`, `Pages\\SO\\${RELATED_SCREEN}.aspx.cs`, 'Pages\\PO\\PO302000.aspx', 'Bin\\Contoso.Extensions.dll']) {
+    const screenId = /Pages\\\w\w\\(\w\w\d{6})\.aspx/.exec(path)?.[1];
+    add({ key: path, group: path.endsWith('.cs') ? 'code' : 'files', name: path.split('\\').pop() ?? path, detail: path, ...(screenId ? { screenId } : {}), a: { tag: 'File', attrs: [['AppRelativePath', path], ['FileSize', String(rng.int(2000, 90000))]], parts: [] } });
+  }
+  // Modern UI per-tenant files.
+  for (const [screen, file] of [[RELATED_SCREEN, 'SO301000.ts'], [RELATED_SCREEN, 'SO301000.html'], ['PO302000', 'PO302000.ts']] as const) {
+    const path = `FrontendSources\\screen\\src\\development\\screens\\${screen.slice(0, 2)}\\${screen}\\extensions\\${file}`;
+    add({ key: path, group: 'files', name: file, detail: `Modern UI file · ${path}`, screenId: screen, a: { tag: 'PerTenantFile', attrs: [['AppRelativePath', path], ['ScreenId', screen], ['LastModified', '2026-09-30T11:02:41']], parts: [] } });
+  }
+  // Pages (screens): pageSource = base64(raw deflate(ASPX)). Every 4th carries a control delta.
   for (let i = 0; i < 22; i++) {
-    const mod = rng.pick(MODS);
-    const screen = `${mod.toUpperCase()}${i < 2 ? 301000 + i : rng.int(100000, 509999)}`;
+    const mod = i === 0 ? 'so' : rng.pick(MODS);
+    const screen = i === 0 ? RELATED_SCREEN : `${mod.toUpperCase()}${i === 1 ? 302001 : rng.int(100000, 509999)}`;
     const path = `~/pages/${mod}/${screen.toLowerCase()}.aspx`;
-    const title = `${rng.pick(WORDS)} ${rng.pick(WORDS)} ${i}`;
-    const fields = Array.from({ length: rng.int(3, 12) }, (_, k) => `    <PXField DataMember="${rng.pick(DACS)}" DataField="Usr${rng.pick(WORDS)}${k}" CommitChanges="True" LabelWidth="${rng.int(80, 200)}" />`);
-    const parts: Part[] = [{ kind: 'lines', lines: fields }];
-    if (i === 7) parts.push({ kind: 'cdata', name: 'pageSource', body: ['<px:PXFormView ID="form" runat="server" DataMember="Document">', '    <Template>', '        <px:PXTextEdit ID="edUsrRoute" runat="server" DataField="UsrRoute" />', '    </Template>', '</px:PXFormView>'] });
-    add(path, 'screens', screen, title, { tag: 'Page', attrs: [['path', path], ['ScreenTitle', title]], parts });
+    // Page 4 is big, so its pageSource line is tens of thousands of characters, as in real exports.
+    const aspx = aspxPage(rng, screen, i === 4 ? 1400 : rng.int(4, 40));
+    const delta = i % 4 === 0 ? [`    <PXFormView ID="form"><Children Key="Template"><PXTextEdit ID="edUsr${rng.pick(WORDS)}" DataField="Usr${rng.pick(WORDS)}" /></Children></PXFormView>`] : [];
+    add({
+      key: path, group: 'screens', name: screen, detail: delta.length ? 'Screen customization' : 'Page', screenId: screen,
+      a: { tag: 'Page', attrs: [['path', path]], parts: delta.length ? [{ kind: 'lines', lines: delta }] : [], aspx },
+    });
+  }
+  // Modern UI editor metadata: bare CDATA with JSON.
+  for (const screen of [RELATED_SCREEN, 'PO302000', 'AR303000']) {
+    const json = JSON.stringify({ screen, fields: Array.from({ length: rng.int(2, 6) }, (_, k) => ({ field: `Usr${rng.pick(WORDS)}${k}`, view: 'Document', visible: k % 2 === 0 })) });
+    add({ key: screen, group: 'screens', name: `${screen} editor fields`, detail: 'Modern UI editor metadata', screenId: screen, a: { tag: 'EditorUpdatedFields', attrs: [['ScreenId', screen]], parts: [{ kind: 'bare', body: [json] }] } });
   }
   // Tables, with a duplicate identity (SOLine twice).
   for (let i = 0; i < 20; i++) {
     const t = i === 0 || i === 13 ? 'SOLine' : `${rng.pick(DACS)}${rng.pick(WORDS)}${i}`;
     const n = rng.int(2, 14);
-    add(t, 'tables', t, `${n} columns`, { tag: 'Table', attrs: [['TableName', t]], parts: [{ kind: 'lines', lines: columns(rng, t, n, `T${i}`) }] });
+    add({ key: t, group: 'tables', name: t, detail: `${n} columns`, a: { tag: 'Table', attrs: [['TableName', t]], parts: [{ kind: 'lines', lines: columns(rng, t, n, `T${i}`) }] } });
   }
-  // Sql, one body containing "]]>" in a comment.
+  // Sql: CDATA TableSchemaXml; one schema has "]]>" in a comment.
   for (let i = 0; i < 7; i++) {
     const t = `Usr${rng.pick(WORDS)}History${i}`;
-    const body = sqlBody(rng, t, rng.int(4, 20));
-    if (i === 2) body.splice(1, 0, '-- the export splits a literal ]]> like this one');
-    add(t, 'sql', t, null, { tag: 'Sql', attrs: [['TableName', t], ['TableSchemaXml', '#CDATA']], parts: [{ kind: 'cdata', name: 'Script', body }] });
+    const body = schemaXml(rng, t, rng.int(4, 20));
+    if (i === 2) body.splice(1, 0, '  <!-- the exporter splits a literal ]]> like this one -->');
+    add({ key: t, group: 'sql', name: t, detail: 'Table schema', a: { tag: 'Sql', attrs: [['TableName', t], ['TableSchemaXml', '#CDATA']], parts: [{ kind: 'cdata', name: 'TableSchemaXml', body }] } });
   }
   // Reports (CDATA XML).
   for (let i = 0; i < 4; i++) {
     const r = `SO64${1000 + i * 10}.rpx`;
-    add(r, 'reports', r, null, { tag: 'Report', attrs: [['ReportName', r]], parts: [{ kind: 'cdata', name: 'Xml', body: reportBody(rng, r, rng.int(10, 40)) }] });
+    add({ key: r, group: 'reports', name: r, detail: null, a: { tag: 'Report', attrs: [['ReportName', r]], parts: [{ kind: 'cdata', name: 'Xml', body: reportBody(rng, r, rng.int(10, 40)) }] } });
   }
-  // Site map nodes (identity: descendant ScreenID).
+  // Site map nodes: identity = first <row> with ScreenID; detail = its Title (entities decoded).
   for (let i = 0; i < 7; i++) {
-    const screen = `${rng.pick(MODS).toUpperCase()}${rng.int(100000, 509999)}`;
-    const row = `<row Position="${rng.int(1, 900)}" Title="${rng.pick(WORDS)} ${rng.pick(WORDS)}" Url="~/Pages/${screen.slice(0, 2)}/${screen}.aspx" ScreenID="${screen}" NodeID="${guid(rng)}" ParentID="${guid(rng)}" />`;
-    add(screen, 'sitemap', screen, null, { tag: 'SiteMapNode', attrs: [], parts: [{ kind: 'lines', lines: dataSet('SiteMap', [row]) }] });
+    const screen = i === 0 ? RELATED_SCREEN : `${rng.pick(MODS).toUpperCase()}${rng.int(100000, 509999)}`;
+    const title = i === 0 ? 'Orders & Returns' : i === 3 ? 'Route "Express" Audit' : `${rng.pick(WORDS)} ${rng.pick(WORDS)}`;
+    add({ key: screen, group: 'sitemap', name: screen, detail: title, screenId: screen, a: { tag: 'SiteMapNode', attrs: [], parts: [{ kind: 'lines', lines: dataSet('SiteMap', siteMapRows(rng, screen, title)) }] } });
   }
-  // Generic inquiries with nested rows (identity: descendant Name).
+  // Generic inquiries: nested <row>s; identity = first <row> with Name.
   for (let i = 0; i < 5; i++) {
     const name = `CT-${rng.pick(WORDS)}${rng.pick(WORDS)}${i}`;
     const id = guid(rng);
     const rows = [
-      `<GIDesign DesignID="${id}" Name="${name}" FilterColCount="3" PageSize="0" ExportTop="0" NewRecordCreationEnabled="False">`,
-      ...Array.from({ length: rng.int(2, 6) }, (_, k) => `    <GITable DesignID="${id}" Alias="${rng.pick(DACS)}${k}" Name="PX.Objects.SO.${rng.pick(DACS)}" />`),
-      ...Array.from({ length: rng.int(3, 10) }, (_, k) => `    <GIResult DesignID="${id}" LineNbr="${k + 1}" ObjectName="${rng.pick(DACS)}" Field="${rng.pick(WORDS).toLowerCase()}Nbr" IsVisible="True" />`),
+      '<GIDesign>',
+      `    <row DesignID="${id}" Name="${name}" FilterColCount="3" PageSize="0" ExportTop="0" NewRecordCreationEnabled="False">`,
+      '        <GITable>',
+      ...Array.from({ length: rng.int(2, 5) }, (_, k) => `            <row Alias="${rng.pick(DACS)}${k}" Name="PX.Objects.SO.${rng.pick(DACS)}" />`),
+      '        </GITable>',
+      '        <GIResult>',
+      ...Array.from({ length: rng.int(3, 9) }, (_, k) => `            <row LineNbr="${k + 1}" ObjectName="${rng.pick(DACS)}" Field="${rng.pick(WORDS).toLowerCase()}Nbr" IsVisible="True" />`),
+      '        </GIResult>',
+      '    </row>',
       '</GIDesign>',
     ];
-    add(name, 'inquiries', name, null, { tag: 'GenericInquiryScreen', attrs: [], parts: [{ kind: 'lines', lines: dataSet('GIDesign', rows) }] });
+    add({ key: name, group: 'inquiries', name, detail: null, a: { tag: 'GenericInquiryScreen', attrs: [], parts: [{ kind: 'lines', lines: dataSet('GIDesign', rows) }] } });
   }
-  // Web service endpoints.
-  for (let i = 0; i < 2; i++) {
-    const nm = `ContosoEndpoint${i + 1}`;
+  // Endpoints: the same name in two versions, plus another one.
+  for (const [nm, ver] of [['ContosoEndpoint', '23.200.001'], ['ContosoEndpoint', '24.200.001'], ['ContosoMobile', '24.200.001']] as const) {
     const lines = [
-      `    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="${nm}" version="23.200.00${i + 1}" systemContractVersion="4">`,
+      `    <Endpoint xmlns="http://www.acumatica.com/entity/maintenance/5.31" name="${nm}" version="${ver}" systemContractVersion="4">`,
       ...Array.from({ length: rng.int(4, 12) }, (_, k) => `        <TopLevelEntity name="${rng.pick(WORDS)}${k}" screen="${rng.pick(MODS).toUpperCase()}${rng.int(100000, 509999)}" />`),
       '    </Endpoint>',
     ];
-    add(nm, 'integration', nm, null, { tag: 'EntityEndpoint', attrs: [['Name', nm], ['Version', `23.200.00${i + 1}`]], parts: [{ kind: 'lines', lines }] });
+    add({ key: nm, idBase: `EntityEndpoint:${nm}@${ver}`, group: 'integration', name: nm, detail: null, a: { tag: 'EntityEndpoint', attrs: [['Name', nm], ['Version', ver]], parts: [{ kind: 'lines', lines }] } });
   }
   // Unknown elements: land in "other" with detail = element name.
   for (let i = 0; i < 2; i++) {
     const nm = `${rng.pick(MODS).toUpperCase()}${rng.int(100000, 509999)}`;
-    add(nm, 'other', nm, 'MobileSiteMapNode', {
-      tag: 'MobileSiteMapNode',
-      attrs: [['Name', nm]],
-      parts: [{ kind: 'lines', lines: [`    <Screen Id="${nm}" Type="SimpleScreen" DisplayName="${rng.pick(WORDS)}" Icon="system://Box" />`] }],
-    });
+    add({ key: nm, group: 'other', name: nm, detail: 'MobileSiteMapNode', a: { tag: 'MobileSiteMapNode', attrs: [['Name', nm]], parts: [{ kind: 'lines', lines: [`    <Screen Id="${nm}" Type="SimpleScreen" DisplayName="${rng.pick(WORDS)}" Icon="system://Box" />`] }] } });
   }
   return items;
 }
@@ -316,98 +422,107 @@ function editCode(el: El, rng: Rng, kind: 'csToken' | 'whitespace', count: numbe
 function buildPair(): ProjectPair {
   const rng = createRng(PROJECT_SEED);
   const items = buildItems(rng);
-  const edits: Record<string, string[]> = { onlyA: [], onlyB: [], modified: [], whitespace: [], moved: [] };
-  const by = (group: ProjectGroup, tag?: string): Item[] => items.filter((it) => it.group === group && (!tag || it.a?.tag === tag || it.b?.tag === tag));
+  const edits: Record<string, string[]> = { onlyA: [], onlyB: [], modified: [], whitespace: [], moved: [], sameAfterJsonReformat: [] };
+  const by = (tag: string): Item[] => items.filter((it) => (it.a ?? it.b)?.tag === tag);
   const pick = (list: Item[], i: number): Item => {
     const it = list[i];
     if (!it) throw new Error(`no item ${i}`);
     return it;
   };
-  const graphs = by('code', 'Graph');
-  const csFiles = by('code', 'File');
-  const pages = by('screens');
-  const tables = by('tables');
+  const graphs = by('Graph');
+  const csFiles = by('File').filter((it) => it.group === 'code' && it.a?.parts.length);
+  const pages = by('Page');
+  const tables = by('Table');
+  const B = (it: Item): El => {
+    if (!it.b) throw new Error(`${it.key} has no B`);
+    return it.b;
+  };
+  const mod = (it: Item, f: (el: El) => void): void => {
+    f(B(it));
+    edits.modified?.push(it.key);
+  };
 
   // Only in A.
-  for (const it of [pick(graphs, 5), pick(pages, 3), pick(tables, 4), pick(csFiles, 2), pick(by('sitemap'), 1), pick(by('other'), 1)]) {
+  for (const it of [pick(graphs, 5), pick(pages, 3), pick(tables, 4), pick(csFiles, 2), pick(by('SiteMapNode'), 1), pick(by('MobileSiteMapNode'), 1), pick(by('PerTenantFile'), 2)]) {
     it.b = null;
     edits.onlyA?.push(it.key);
   }
-  // Modified code (single-token C# changes) and other content changes.
-  for (const i of [0, 1, 2, 8, 9, 15, 21, 30]) {
-    const it = pick(graphs, i);
-    if (it.b) editCode(it.b, rng, 'csToken', rng.int(1, 4));
-    edits.modified?.push(it.key);
-  }
-  for (const i of [0, 7]) {
-    const it = pick(csFiles, i);
-    if (it.b) editCode(it.b, rng, 'csToken', 2);
-    edits.modified?.push(it.key);
-  }
-  const mod = (it: Item, f: (el: El) => void): void => {
-    if (!it.b) throw new Error(`${it.key} has no B`);
-    f(it.b);
-    edits.modified?.push(it.key);
-  };
-  mod(pick(pages, 1), (el) => setAttr(el, 'ScreenTitle', `${attr(el, 'ScreenTitle') ?? ''} (v2)`));
-  mod(pick(pages, 7), (el) => {
-    const c = cdatas(el)[0];
-    if (c) c.body.splice(3, 0, '        <px:PXCheckBox ID="chkUsrRush" runat="server" DataField="UsrRush" />');
+  // Modified code: single-token C# changes.
+  for (const i of [0, 1, 2, 8, 9, 15, 21, 30]) mod(pick(graphs, i), (el) => editCode(el, rng, 'csToken', rng.int(1, 4)));
+  for (const i of [0, 7]) mod(pick(csFiles, i), (el) => editCode(el, rng, 'csToken', 2));
+  // Other modifications, at least one per kind.
+  mod(pick(pages, 1), (el) => el.aspx?.splice(10, 0, '            <px:PXCheckBox ID="chkUsrRush" runat="server" DataField="UsrRush" />'));
+  mod(pick(pages, 4), (el) => {
+    if (el.aspx) el.aspx[3] = (el.aspx[3] ?? '').replace('Visible="True"', 'Visible="False"');
+  });
+  mod(pick(by('DAC'), 0), (el) => {
+    const f = el.parts.find((p): p is Extract<Part, { kind: 'field' }> => p.kind === 'field' && p.body !== null);
+    if (f?.body) f.body[0] = (f.body[0] ?? '').replace(/\((\d+)/, (_, n: string) => `(${Number(n) + 10}`);
+  });
+  mod(pick(by('DAC'), 1), (el) => el.parts.push({ kind: 'field', attrs: [['FieldName', 'UsrAddedInB'], ['TypeName', 'bool?'], ['StorageName', 'DBTableColumn']], body: ['[PXDBBool]', '[PXUIField(DisplayName = "Added In B")]'] }));
+  mod(pick(by('EditorUpdatedFields'), 0), (el) => {
+    const p = el.parts[0];
+    if (p?.kind === 'bare') p.body = [(p.body[0] ?? '').replace('"visible":true', '"visible":"maybe"')];
   });
   mod(pick(tables, 6), (el) => {
     const p = el.parts[0];
-    if (p?.kind === 'lines') p.lines.push('    <Column TableName="X" ColumnName="UsrAddedInB" ColumnType="bit" AllowNull="True" IsNewColumn="True" />'.replace('"X"', `"${attr(el, 'TableName') ?? ''}"`));
+    if (p?.kind === 'lines') p.lines.push(`    <Column TableName="${getAttr(el.attrs, 'TableName')}" ColumnName="UsrAddedInB" ColumnType="bit" AllowNull="True" IsNewColumn="True" />`);
   });
   // The second SOLine (duplicate identity) changes; the first does not.
   mod(pick(tables, 13), (el) => {
     const p = el.parts[0];
     if (p?.kind === 'lines') p.lines.pop();
   });
-  mod(pick(by('sql'), 1), (el) => {
-    const c = cdatas(el)[0];
-    if (c) c.body.splice(5, 0, '    [UsrAddedInB] NVARCHAR(30) NULL,');
-  });
-  mod(pick(by('reports'), 0), (el) => {
+  mod(pick(by('Sql'), 1), (el) => cdatas(el)[0]?.body.splice(3, 0, '  <col name="UsrAddedInB" type="NVarChar(30)" nullable="true" />'));
+  mod(pick(by('Report'), 0), (el) => {
     const c = cdatas(el)[0];
     if (c) c.body[1] = (c.body[1] ?? '').replace('">', '" Landscape="True">');
   });
-  mod(pick(by('sitemap'), 2), (el) => {
+  mod(pick(by('SiteMapNode'), 2), (el) => {
     const p = el.parts[0];
-    if (p?.kind === 'lines') p.lines = p.lines.map((l) => l.replace(/Title="([^"]*)"/, 'Title="$1 Renamed"'));
+    if (p?.kind === 'lines') p.lines = p.lines.map((l) => l.replace(/Position="(\d+)"/, (_, n: string) => `Position="${Number(n) + 1}"`));
   });
-  mod(pick(by('inquiries'), 0), (el) => {
+  mod(pick(by('GenericInquiryScreen'), 0), (el) => {
     const p = el.parts[0];
     if (p?.kind === 'lines') {
-      const at = p.lines.findIndex((l) => l.includes('</GIDesign>'));
-      p.lines.splice(at, 0, '                    <GIResult DesignID="added" LineNbr="99" ObjectName="SOOrder" Field="orderTotal" IsVisible="True" />');
+      const at = p.lines.findIndex((l) => l.includes('</GIResult>'));
+      p.lines.splice(at, 0, '                        <row LineNbr="99" ObjectName="SOOrder" Field="orderTotal" IsVisible="True" />');
     }
   });
-  mod(pick(by('integration'), 0), (el) => {
+  mod(pick(by('EntityEndpoint'), 1), (el) => {
     const p = el.parts[0];
     if (p?.kind === 'lines') p.lines.splice(1, 1);
   });
-  mod(pick(by('files'), 0), (el) => {
+  mod(pick(by('File').filter((it) => it.group === 'files' && it.a?.parts.length), 0), (el) => {
     const c = cdatas(el)[0];
-    if (c) c.body[2] = (c.body[2] ?? '').replace('PrimaryView="Document"', 'PrimaryView="CurrentDocument"');
+    if (c) c.body[2] = (c.body[2] ?? '').replace('value="true"', 'value="false"');
   });
+  // A content-less File: no CDATA, so the element itself is compared.
+  mod(pick(by('File').filter((it) => !it.a?.parts.length), 0), (el) => setAttr(el, 'FileSize', String(Number(getAttr(el.attrs, 'FileSize')) + 512)));
 
   // Whitespace-only.
   for (const i of [3, 4]) {
-    const it = pick(graphs, i);
-    if (it.b) editCode(it.b, rng, 'whitespace', 3);
-    edits.whitespace?.push(it.key);
+    editCode(B(pick(graphs, i)), rng, 'whitespace', 3);
+    edits.whitespace?.push(pick(graphs, i).key);
   }
   {
     const it = pick(tables, 2);
-    const p = it.b?.parts[0];
+    const p = B(it).parts[0];
     if (p?.kind === 'lines') p.lines[0] = `  ${p.lines[0] ?? ''}`;
     edits.whitespace?.push(it.key);
   }
   {
     const it = pick(csFiles, 5);
-    const c = it.b ? cdatas(it.b)[0] : undefined;
+    const c = cdatas(B(it))[0];
     if (c) c.body[c.body.length - 3] = `${c.body[c.body.length - 3] ?? ''}   `;
     edits.whitespace?.push(it.key);
+  }
+  // Reformatted JSON (identical after pretty-printing) is "same".
+  {
+    const it = pick(by('EditorUpdatedFields'), 1);
+    const p = B(it).parts[0];
+    if (p?.kind === 'bare') p.body = JSON.stringify(JSON.parse(p.body.join('\n')), null, 1).split('\n');
+    edits.sameAfterJsonReformat?.push(it.key);
   }
 
   // The CDATA split: a Graph whose C# contains "]]>" on both sides.
@@ -418,18 +533,17 @@ function buildPair(): ProjectPair {
     if (c) c.body.splice(Math.floor(c.body.length / 2), 0, splitLine);
   }
 
-  // Only in B (appended in B order below).
-  const newGraph = 'SOOrderExt_AddedInB';
+  // Only in B.
   const added: Item[] = [
-    { key: newGraph, group: 'code', name: newGraph, detail: 'New DAC', a: null, b: { tag: 'Graph', attrs: [['ClassName', newGraph], ['Source', '#CDATA'], ['IsNew', 'True'], ['FileType', 'NewDac']], parts: [{ kind: 'cdata', name: 'Source', body: csharpUnit(PROJECT_SEED + 9001, 120) }] } },
-    { key: 'UsrRouteAudit', group: 'sql', name: 'UsrRouteAudit', detail: null, a: null, b: { tag: 'Sql', attrs: [['TableName', 'UsrRouteAudit'], ['TableSchemaXml', '#CDATA']], parts: [{ kind: 'cdata', name: 'Script', body: sqlBody(rng, 'UsrRouteAudit', 6) }] } },
-    { key: 'SO509999', group: 'sitemap', name: 'SO509999', detail: null, a: null, b: { tag: 'SiteMapNode', attrs: [], parts: [{ kind: 'lines', lines: dataSet('SiteMap', [`<row Position="12" Title="Route Audit" Url="~/Pages/SO/SO509999.aspx" ScreenID="SO509999" NodeID="${guid(rng)}" ParentID="${guid(rng)}" />`]) }] } },
+    { key: 'SOOrderExt_AddedInB', group: 'code', name: 'SOOrderExt_AddedInB', detail: 'New DAC', a: null, b: { tag: 'Graph', attrs: [['ClassName', 'SOOrderExt_AddedInB'], ['Source', '#CDATA'], ['IsNew', 'True'], ['FileType', 'NewDac']], parts: [{ kind: 'cdata', name: 'Source', body: csharpUnit(PROJECT_SEED + 9001, 120) }] } },
+    { key: 'UsrRouteAudit', group: 'sql', name: 'UsrRouteAudit', detail: 'Table schema', a: null, b: { tag: 'Sql', attrs: [['TableName', 'UsrRouteAudit'], ['TableSchemaXml', '#CDATA']], parts: [{ kind: 'cdata', name: 'TableSchemaXml', body: schemaXml(rng, 'UsrRouteAudit', 6) }] } },
+    { key: 'SO509999', group: 'sitemap', name: 'SO509999', detail: 'Route Audit', screenId: 'SO509999', a: null, b: { tag: 'SiteMapNode', attrs: [], parts: [{ kind: 'lines', lines: dataSet('SiteMap', siteMapRows(rng, 'SO509999', 'Route Audit')) }] } },
     { key: 'fr-FR', group: 'other', name: 'fr-FR', detail: 'Locale', a: null, b: { tag: 'Locale', attrs: [['Name', 'fr-FR'], ['IsActive', 'True']], parts: [{ kind: 'lines', lines: ['    <Translation Source="Route" Target="Itinéraire" />'] }] } },
   ];
   items.push(...added);
   edits.onlyB?.push(...added.map((it) => it.key));
 
-  // Order: A in build order; B moves one Table and one Graph to new places.
+  // Order: A in build order; B moves one Table and one Graph, and inserts the new items.
   const orderA = items.filter((it) => it.a);
   const orderB = items.filter((it) => it.b && !added.includes(it));
   const moveTable = pick(tables, 8);
@@ -449,10 +563,9 @@ function buildPair(): ProjectPair {
 
   const ranges = new Map<Item, { a?: { startLine: number; endLine: number }; b?: { startLine: number; endLine: number } }>();
   const doc = (order: Item[], side: 'a' | 'b', root: Record<string, string>): string => {
-    const rootAttrs = Object.entries(root).map(([k, v]) => ` ${k}="${escAttr(v)}"`).join('');
-    const out = ['<?xml version="1.0" encoding="utf-8"?>', `<Customization${rootAttrs}>`];
+    const out = [`<Customization${attrs(Object.entries(root))}>`];
     order.forEach((it, i) => {
-      if (i === 10) out.push('<!-- items below were merged from the 24R1 project -->');
+      if (i === 10) out.push('<!-- items below were merged from an older project -->');
       const el = it[side];
       if (!el) return;
       const start = out.length + 1;
@@ -462,29 +575,29 @@ function buildPair(): ProjectPair {
       ranges.set(it, r);
     });
     out.push('</Customization>');
-    return out.join('\n') + '\n';
+    return out.join(EOL) + EOL;
   };
   const a = doc(orderA, 'a', rootA);
   const b = doc(orderB, 'b', rootB);
 
-  // Ids: `${element}:${key}`, duplicates get #2, #3 in document order (per side; A and B agree here).
   const seen = new Map<string, number>();
   const expected: ExpectedItem[] = items.map((it) => {
     const el = (it.a ?? it.b) as El;
-    const base = `${el.tag}:${it.key}`;
+    const base = it.idBase ?? `${el.tag}:${it.key}`;
     const n = (seen.get(base) ?? 0) + 1;
     seen.set(base, n);
-    const views: ('code' | 'xml')[] = cdatas(el).length ? ['code', 'xml'] : ['xml'];
     const r = ranges.get(it) ?? {};
+    const sidesDisagree = it.a && it.b && (el.tag === 'DAC' || el.tag === 'Table') && it.a.parts.length !== it.b.parts.length;
     return {
       id: n === 1 ? base : `${base}#${n}`,
       element: el.tag,
       key: it.key,
       group: it.group,
       name: it.name,
-      detail: it.detail,
+      detail: sidesDisagree ? null : it.detail,
+      screenId: it.screenId ?? null,
       status: status(it.a, it.b),
-      views,
+      views: views(el),
       a: r.a ?? null,
       b: r.b ?? null,
     };
@@ -497,8 +610,18 @@ function buildPair(): ProjectPair {
     byStatus[e.status]++;
     byGroup[e.group] = (byGroup[e.group] ?? 0) + 1;
   }
-  const splitId = expected.find((e) => e.key === split.key)?.id ?? '';
-  return { a, b, root: { a: rootA, b: rootB }, items: expected, counts: { total: expected.length, byStatus, byGroup }, cdataSplit: { id: splitId, mustContain: 'idx[0]]> 0' }, edits };
+  const idOf = (it: Item): string => expected.find((e) => e.key === it.key && e.element === (it.a ?? it.b)?.tag)?.id ?? '';
+  return {
+    a,
+    b,
+    root: { a: rootA, b: rootB },
+    items: expected,
+    counts: { total: expected.length, byStatus, byGroup },
+    cdataSplit: { id: idOf(split), mustContain: 'idx[0]]> 0' },
+    relatedScreen: { screenId: RELATED_SCREEN, ids: expected.filter((e) => e.screenId === RELATED_SCREEN).map((e) => e.id) },
+    pageSource: { id: idOf(pick(pages, 0)), mustContain: `Inherits="Page_${RELATED_SCREEN}"` },
+    edits,
+  };
 }
 
 let cached: ProjectPair | undefined;

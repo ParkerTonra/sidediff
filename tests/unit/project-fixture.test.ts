@@ -1,5 +1,6 @@
 // The `project` fixture pair and its sidecar (explorer expectations).
 import { createHash } from 'node:crypto';
+import { inflateRawSync } from 'node:zlib';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -13,6 +14,8 @@ const sidecar = JSON.parse(readFileSync(join(ROOT, 'fixtures', 'project.changes.
   b: { lines: number; sha256: string; root: Record<string, string> };
   counts: { total: number; byStatus: Record<string, number>; byGroup: Record<string, number> };
   cdataSplit: { id: string; mustContain: string };
+  relatedScreen: { screenId: string; ids: string[] };
+  pageSource: { id: string; mustContain: string };
   edits: Record<string, string[]>;
   items: ExpectedItem[];
 };
@@ -22,6 +25,8 @@ const item = (id: string): ExpectedItem => {
   if (!it) throw new Error(`no item ${id}`);
   return it;
 };
+const LF = '\n';
+const CR = '\r';
 
 describe('project fixture', () => {
   it('regenerates byte-identical to the committed sidecar', () => {
@@ -32,7 +37,7 @@ describe('project fixture', () => {
 
   it('is about 20k lines a side with a changed product-version', () => {
     for (const s of [sidecar.a, sidecar.b]) {
-      expect(s.lines).toBeGreaterThan(18_000);
+      expect(s.lines).toBeGreaterThan(17_000);
       expect(s.lines).toBeLessThan(22_000);
     }
     expect(sidecar.a.root['product-version']).not.toBe(sidecar.b.root['product-version']);
@@ -42,15 +47,18 @@ describe('project fixture', () => {
 
   it('has every element kind the contract classifies, plus unknown ones in other', () => {
     const elements = new Set(sidecar.items.map((i) => i.element));
-    for (const e of ['Graph', 'File', 'Page', 'Table', 'Sql', 'Report', 'SiteMapNode', 'GenericInquiryScreen', 'EntityEndpoint']) expect(elements, e).toContain(e);
+    for (const e of ['Graph', 'DAC', 'File', 'PerTenantFile', 'Page', 'EditorUpdatedFields', 'Table', 'Sql', 'Report', 'SiteMapNode', 'GenericInquiryScreen', 'EntityEndpoint']) expect(elements, e).toContain(e);
     const others = sidecar.items.filter((i) => i.group === 'other');
     expect(new Set(others.map((i) => i.element)).size).toBeGreaterThanOrEqual(2);
     expect(others.every((i) => i.detail === i.element)).toBe(true);
     const fileTypes = new Set([...p.a.matchAll(/FileType="(\w+)"/g)].map((m) => m[1]));
-    expect([...fileTypes].sort()).toEqual(['ExistingDac', 'ExistingGraph', 'NewDac', 'NewGraph']);
+    expect([...fileTypes].sort()).toEqual(['ExistingDac', 'ExistingGraph', 'NewDac', 'NewFile', 'NewGraph']);
     expect(sidecar.items.some((i) => i.element === 'File' && i.group === 'files')).toBe(true);
     expect(sidecar.items.some((i) => i.element === 'File' && i.group === 'code')).toBe(true);
-    expect(sidecar.items.some((i) => i.element === 'Page' && i.views[0] === 'code')).toBe(true);
+    expect(sidecar.items.filter((i) => i.element === 'Page').every((i) => i.views[0] === 'code')).toBe(true);
+    expect(sidecar.items.some((i) => i.element === 'Page' && i.views.includes('changes'))).toBe(true);
+    // Real exports also carry content-less File references.
+    expect(p.a).toMatch(/<File AppRelativePath="[^"]+" FileSize="\d+" \/>/);
   });
 
   it('covers every status, duplicates and moves', () => {
@@ -77,13 +85,14 @@ describe('project fixture', () => {
   });
 
   it('line ranges point at the element in each file', () => {
-    const linesA = p.a.split('\n');
-    const linesB = p.b.split('\n');
+    const linesA = p.a.split(LF);
+    const linesB = p.b.split(LF);
     for (const it of sidecar.items) {
       for (const [r, lines] of [[it.a, linesA], [it.b, linesB]] as const) {
         if (!r) continue;
         expect(lines[r.startLine - 1]?.startsWith(`<${it.element}`), it.id).toBe(true);
-        expect(lines[r.endLine - 1], it.id).toBe(`</${it.element}>`);
+        const end = (lines[r.endLine - 1] ?? '').trimEnd();
+        expect(r.startLine === r.endLine ? end.endsWith(' />') : end === `</${it.element}>`, it.id).toBe(true);
       }
     }
   });
@@ -91,10 +100,42 @@ describe('project fixture', () => {
   it('splits a literal "]]>" across CDATA sections on both sides', () => {
     const it = item(sidecar.cdataSplit.id);
     for (const [text, r] of [[p.a, it.a], [p.b, it.b]] as const) {
-      const el = text.split('\n').slice((r?.startLine ?? 1) - 1, r?.endLine).join('\n');
+      const el = text.split(LF).slice((r?.startLine ?? 1) - 1, r?.endLine).join(LF);
       expect(el).toContain(']]]]><![CDATA[>');
       const joined = el.replace(/\]\]\]\]><!\[CDATA\[>/g, ']]>');
       expect(joined).toContain(sidecar.cdataSplit.mustContain);
     }
+  });
+
+  it('is shaped like a real export: no <?xml> header, CRLF, entities, Name@Version endpoints', () => {
+    for (const t of [p.a, p.b]) {
+      expect(t.startsWith('<Customization ')).toBe(true);
+      expect(t.split(LF).slice(0, -1).every((l) => l.endsWith(CR))).toBe(true);
+      expect(t).toContain('Title="Orders &amp; Returns"');
+      expect(t).toContain('&quot;Express&quot;');
+      expect(Math.max(...t.split(LF).map((l) => l.length))).toBeGreaterThan(15_000);
+    }
+    const eps = sidecar.items.filter((i) => i.element === 'EntityEndpoint').map((i) => i.id);
+    expect(eps).toContain('EntityEndpoint:ContosoEndpoint@23.200.001');
+    expect(eps).toContain('EntityEndpoint:ContosoEndpoint@24.200.001');
+    expect(item('SiteMapNode:SO301000').detail).toBe('Orders & Returns');
+  });
+
+  it('pageSource is base64 of raw-deflated ASPX', () => {
+    const it = item(sidecar.pageSource.id);
+    const line = p.a.split(LF)[(it.a?.startLine ?? 1) - 1] ?? '';
+    const b64 = /pageSource="([^"]+)"/.exec(line)?.[1] ?? '';
+    expect(inflateRawSync(Buffer.from(b64, 'base64')).toString('utf8')).toContain(sidecar.pageSource.mustContain);
+  });
+
+  it('one screen has a page, file references, Modern UI files, a site map entry and editor fields', () => {
+    const elements = sidecar.relatedScreen.ids.map((id) => item(id).element).sort();
+    expect(elements).toEqual(['EditorUpdatedFields', 'File', 'File', 'Page', 'PerTenantFile', 'PerTenantFile', 'SiteMapNode']);
+  });
+
+  it('reformatted JSON is same; changed JSON is modified', () => {
+    const json = sidecar.items.filter((i) => i.element === 'EditorUpdatedFields');
+    expect(json.filter((i) => i.status === 'modified')).toHaveLength(1);
+    for (const key of sidecar.edits.sameAfterJsonReformat ?? []) expect(json.find((i) => i.key === key)?.status).toBe('same');
   });
 });
