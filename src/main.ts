@@ -13,7 +13,7 @@ try {
   // JSON views (EditorUpdatedFields) use the json pack once it is installed.
   const project = createProjectIndexer({ languageAvailable: (id) => registry.get(id)?.installed === true });
   window.__sidediff = { engine, registry, project };
-  createApp({ root, engine, registry, project });
+  createApp({ root, engine, registry, project, views: engine, history: engine });
 } catch (err) {
   root.textContent = `SideDiff failed to start: ${err instanceof Error ? err.message : String(err)}`;
   console.error(err);
