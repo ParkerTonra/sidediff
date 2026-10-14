@@ -25,6 +25,7 @@ const SHORTCUTS: ReadonlyArray<[string, string]> = [
   ['Alt+H', 'Toggle “diff only”'],
   ['Ctrl+F', 'Find in the focused pane'],
   ['?', 'Show this cheat sheet'],
+  ['Ctrl+M', 'Toggle Tab focus mode (Tab moves focus out of the editor)'],
   ['Esc', 'Close dialogs'],
 ];
 
@@ -60,7 +61,7 @@ async function startApp({ root, engine, registry }: AppDeps): Promise<void> {
   // ---------- DOM ----------
   const btnDiffOnly = h('button', { type: 'button', class: 'btn toggle', 'data-testid': 'btn-diff-only', 'aria-pressed': 'false', title: 'Show only changed regions (Alt+H)' }, 'Diff only');
   const inputContext = h('input', { type: 'number', class: 'num', id: 'sd-context', min: CONTEXT_LINES_MIN, max: CONTEXT_LINES_MAX, step: 1, 'data-testid': 'input-context-lines' });
-  const btnPrev = h('button', { type: 'button', class: 'btn', 'data-testid': 'btn-prev', title: 'Previous change (Shift+F7, Alt+Up)', 'aria-label': 'Previous change' }, '↑ Prev');
+  const btnPrev = h('button', { type: 'button', class: 'btn', 'data-testid': 'btn-prev', title: 'Previous change (Shift+F7, Alt+Up)', 'aria-label': 'Prev change' }, '↑ Prev');
   const btnNext = h('button', { type: 'button', class: 'btn', 'data-testid': 'btn-next', title: 'Next change (F7, Alt+Down)', 'aria-label': 'Next change' }, 'Next ↓');
   const changePos = h('span', { class: 'change-pos', 'data-testid': 'change-position', 'aria-live': 'polite' }, 'no changes');
   const selectView = h('select', { id: 'sd-view', 'data-testid': 'opt-view-mode' },
@@ -90,6 +91,7 @@ async function startApp({ root, engine, registry }: AppDeps): Promise<void> {
   const panes = {} as Record<Side, {
     header: HTMLElement; label: HTMLInputElement; file: HTMLInputElement; meta: HTMLElement;
     hint: HTMLElement; drop: HTMLElement; statLabel: HTMLElement;
+    btnOpen: HTMLButtonElement; btnCopy: HTMLButtonElement; btnClear: HTMLButtonElement;
   }>;
   for (const side of SIDES) {
     const upper = side.toUpperCase();
@@ -106,7 +108,7 @@ async function startApp({ root, engine, registry }: AppDeps): Promise<void> {
       h('span', {}, 'Paste text here (Ctrl+V), drop a file, or use Open…'));
     const drop = h('div', { class: `drop-overlay drop-${side}`, 'aria-hidden': 'true' }, `Drop to load into ${upper}`);
     const statLabel = h('span', { class: 'stat-label', 'data-testid': `stat-label-${side}` });
-    panes[side] = { header, label, file, meta, hint, drop, statLabel };
+    panes[side] = { header, label, file, meta, hint, drop, statLabel, btnOpen, btnCopy, btnClear };
 
     btnOpen.addEventListener('click', () => file.click());
     file.addEventListener('change', () => {
@@ -182,8 +184,14 @@ async function startApp({ root, engine, registry }: AppDeps): Promise<void> {
   // ---------- rendering ----------
   function renderLabels(syncInputs: boolean): void {
     for (const side of SIDES) {
-      if (syncInputs) panes[side].label.value = settings.labels[side];
-      panes[side].statLabel.textContent = settings.labels[side];
+      const p = panes[side];
+      const name = settings.labels[side];
+      if (syncInputs) p.label.value = name;
+      p.statLabel.textContent = name;
+      // Distinct accessible names per pane; each contains the visible text (WCAG 2.5.3).
+      p.btnOpen.setAttribute('aria-label', `Open a file into side ${side.toUpperCase()}: ${name}`);
+      p.btnCopy.setAttribute('aria-label', `Copy all of side ${side.toUpperCase()}: ${name}`);
+      p.btnClear.setAttribute('aria-label', `Clear side ${side.toUpperCase()}: ${name}`);
     }
     document.title = `${settings.labels.a} ↔ ${settings.labels.b} · SideDiff`;
   }
