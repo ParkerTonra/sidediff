@@ -90,3 +90,14 @@ declare module 'monaco-editor/editor/browser/viewParts/overlayWidgets/overlayWid
     _updateMaxMinWidth(): void;
   }
 }
+
+declare module 'monaco-editor/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer' {
+  import type { DetailedLineRangeMapping } from 'monaco-editor/editor/common/diff/rangeMapping';
+  export class DefaultLinesDiffComputer {
+    computeDiff(
+      originalLines: string[],
+      modifiedLines: string[],
+      options: { ignoreTrimWhitespace: boolean; maxComputationTimeMs: number; computeMoves: boolean },
+    ): { changes: readonly DetailedLineRangeMapping[]; hitTimeout: boolean };
+  }
+}

@@ -303,6 +303,33 @@ async function main(): Promise<void> {
   const freed = await untilDiff(page, "e.setText('b', e.getText('a').replace('Generated', 'Changed'));");
   check("worker is free again after the capped run", freed.includes('"changes":1'), freed.slice(0, 120));
 
+  // --- a newer setText abandons a running (slow) diff ----------------------
+  const sup = await page.evaluate(async () => {
+    const e = window.__engine!;
+    const g = window.__gen!(150_000);
+    const unrelated = g.a.split('\n').map((l, i) => (i % 2 ? l + ' x' : 'y' + l)).join('\n');
+    const before = window.__supersededRuns!();
+    const done: { t: number; changes: number; quitEarly: boolean }[] = [];
+    const off = e.on('diff:done', (s) => done.push({ t: performance.now(), changes: s.changes, quitEarly: s.quitEarly }));
+    e.setText('a', unrelated);
+    e.setText('b', g.b); // slow: every line differs, runs toward the 10 s budget
+    await new Promise((r) => setTimeout(r, 300));
+    const t0 = performance.now();
+    e.setText('a', g.a); // the real pair
+    await new Promise<void>((r) => {
+      const poll = () => (done.some((d) => d.t > t0) ? r() : setTimeout(poll, 20));
+      poll();
+    });
+    off();
+    const last = done[done.length - 1]!;
+    return { ms: Math.round(last.t - t0), changes: last.changes, quitEarly: last.quitEarly, superseded: window.__supersededRuns!() - before, doneCount: done.length };
+  });
+  check(
+    'newer setText abandons the running diff (no wait for the stale run)',
+    sup.ms < 3000 && !sup.quitEarly && sup.changes > 100 && sup.superseded >= 1 && sup.doneCount === 1,
+    JSON.stringify(sup),
+  );
+
   // --- events: diff:start on option changes; degraded enter/leave ----------
   const ev = await page.evaluate(async () => {
     const e = window.__engine!;

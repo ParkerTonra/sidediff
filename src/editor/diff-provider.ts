@@ -1,17 +1,19 @@
 // Replaces Monaco's diff provider factory so the engine controls every diff
 // run: exact timing, ignore-all-whitespace, degraded mode (no intra-line
-// changes), and the time cap. The diff itself still runs in Monaco's editor
-// web worker through IEditorWorkerService.computeDiff (same call Monaco makes).
+// changes), the time cap, and cancellation. The diff runs Monaco's own
+// algorithm in a dedicated worker (diff.worker.ts) that the engine terminates
+// when a newer request supersedes a running one (DECISIONS.md D11).
 //
 // Must be installed before anything initializes Monaco's standalone services;
 // monaco-setup.ts calls installDiffProvider() at module load.
 import * as monaco from 'monaco-editor/editor/editor.api';
 import { StandaloneServices } from 'monaco-editor/editor/standalone/browser/standaloneServices';
-import { IEditorWorkerService } from 'monaco-editor/editor/common/services/editorWorker';
 import type { IDocumentDiffProviderOptions } from 'monaco-editor/editor/common/services/editorWorker';
 import { DetailedLineRangeMapping, RangeMapping } from 'monaco-editor/editor/common/diff/rangeMapping';
 import type { IDocumentDiff } from 'monaco-editor/editor/common/diff/rangeMapping';
 import { LineRange } from 'monaco-editor/editor/common/core/ranges/lineRange';
+import DiffWorker from './diff.worker?worker';
+import type { DiffWorkerRequest, DiffWorkerResponse, SerializedChange } from './diff-worker-protocol';
 import { mapStrippedColumn, stripWhitespace } from './pure';
 
 type TextModel = monaco.editor.ITextModel;
@@ -59,6 +61,128 @@ interface CancellationTokenLike {
   readonly isCancellationRequested: boolean;
 }
 
+// --- dedicated diff worker -------------------------------------------------
+
+class Superseded extends Error {
+  constructor() {
+    super('superseded by a newer diff request');
+  }
+}
+
+interface SideText {
+  /** Model identity + version; the worker keeps the last text per side. */
+  key: string;
+  text: () => string;
+}
+
+function sideOf(m: TextModel): SideText {
+  return { key: `${m.uri.toString()}#${m.getVersionId()}`, text: () => m.getValue() };
+}
+
+interface PendingRun {
+  id: number;
+  resolve: (d: IDocumentDiff) => void;
+  reject: (e: unknown) => void;
+}
+
+class DiffWorkerClient {
+  private worker: Worker | null = null;
+  private sent: Record<'o' | 'm', string> = { o: '', m: '' };
+  private seq = 0;
+  private pending: PendingRun | null = null;
+  /** Running diffs abandoned because a newer request arrived. */
+  superseded = 0;
+
+  private ensure(): Worker {
+    if (this.worker) return this.worker;
+    const w = new DiffWorker();
+    w.onmessage = (ev: MessageEvent<DiffWorkerResponse>) => this.onMessage(ev.data);
+    w.onerror = (ev) => {
+      ev.preventDefault();
+      this.stop(new Error(`diff worker failed: ${ev.message || 'unknown error'}`));
+    };
+    this.worker = w;
+    this.sent = { o: '', m: '' };
+    return w;
+  }
+
+  /** Terminates the worker and rejects the running computation, if any. */
+  private stop(err: unknown): void {
+    const p = this.pending;
+    this.pending = null;
+    this.worker?.terminate();
+    this.worker = null;
+    p?.reject(err);
+  }
+
+  /** Abandons a running computation (its promise rejects with Superseded). */
+  supersede(): void {
+    if (!this.pending) return;
+    this.superseded++;
+    this.stop(new Superseded());
+  }
+
+  compute(o: SideText, m: SideText, options: IDocumentDiffProviderOptions): Promise<IDocumentDiff> {
+    this.supersede();
+    const w = this.ensure();
+    const post = (msg: DiffWorkerRequest): void => w.postMessage(msg);
+    // One string per side: a single block copy, no per-line structured clone.
+    if (this.sent.o !== o.key) post({ type: 'text', slot: 'o', key: o.key, text: o.text() });
+    if (this.sent.m !== m.key) post({ type: 'text', slot: 'm', key: m.key, text: m.text() });
+    this.sent = { o: o.key, m: m.key };
+    const id = ++this.seq;
+    return new Promise<IDocumentDiff>((resolve, reject) => {
+      this.pending = { id, resolve, reject };
+      post({
+        type: 'diff',
+        id,
+        o: o.key,
+        m: m.key,
+        options: {
+          ignoreTrimWhitespace: options.ignoreTrimWhitespace,
+          maxComputationTimeMs: options.maxComputationTimeMs,
+          computeMoves: false,
+        },
+      });
+    });
+  }
+
+  private onMessage(msg: DiffWorkerResponse): void {
+    const p = this.pending;
+    if (!p || p.id !== msg.id) return;
+    this.pending = null;
+    if (msg.type === 'error') {
+      this.sent = { o: '', m: '' };
+      p.reject(new Error(msg.message));
+      return;
+    }
+    p.resolve({ identical: msg.identical, quitEarly: msg.quitEarly, changes: msg.changes.map(toMapping), moves: [] });
+  }
+}
+
+function toMapping(c: SerializedChange): DetailedLineRangeMapping {
+  return new DetailedLineRangeMapping(
+    new LineRange(c[0], c[1]),
+    new LineRange(c[2], c[3]),
+    c[4]?.map(
+      (r) =>
+        new RangeMapping(
+          new monaco.Range(r[0] ?? 1, r[1] ?? 1, r[2] ?? 1, r[3] ?? 1),
+          new monaco.Range(r[4] ?? 1, r[5] ?? 1, r[6] ?? 1, r[7] ?? 1),
+        ),
+    ),
+  );
+}
+
+const diffWorker = new DiffWorkerClient();
+
+/** Test hook: how many running diffs were abandoned for a newer request. */
+export function supersededRuns(): number {
+  return diffWorker.superseded;
+}
+
+// --- provider --------------------------------------------------------------
+
 class EngineDiffProvider {
   private readonly emitter = new monaco.Emitter<void>();
   readonly onDidChange = this.emitter.event;
@@ -85,19 +209,15 @@ class EngineDiffProvider {
         computeMoves: false,
         maxComputationTimeMs: ctl?.maxComputationTimeMs ?? options.maxComputationTimeMs,
       };
-      if (!ctl?.ignoreAllWhitespace && shadowInflight === 0) disposeShadows();
+      // Any newer request makes a running one stale: stop it so this request
+      // does not queue behind it in the worker.
+      diffWorker.supersede();
       let result = trivialDiff(original, modified);
       if (!result) {
         result = ctl?.ignoreAllWhitespace
           ? await computeIgnoringAllWhitespace(original, modified, opts)
-          : await worker().computeDiff(original.uri, modified.uri, opts, 'advanced');
+          : await diffWorker.compute(sideOf(original), sideOf(modified), opts);
       }
-      if (!result && (original.isDisposed() || modified.isDisposed())) {
-        // The models were replaced while the worker ran; a newer run follows.
-        ctl?.onRunEnd({ ms: performance.now() - t0, quitEarly: true, identical: false, cancelled: true });
-        return { changes: [], identical: false, quitEarly: true, moves: [] };
-      }
-      if (!result) throw new Error('no diff result available');
       if (ctl?.lineLevelOnly) {
         result = { ...result, changes: result.changes.map((c) => new DetailedLineRangeMapping(c.original, c.modified, undefined)) };
       }
@@ -109,13 +229,13 @@ class EngineDiffProvider {
       });
       return result;
     } catch (err) {
-      if (token.isCancellationRequested) {
+      if (err instanceof Superseded || token.isCancellationRequested || original.isDisposed() || modified.isDisposed()) {
         ctl?.onRunEnd({ ms: performance.now() - t0, quitEarly: true, identical: false, cancelled: true });
       } else {
         ctl?.onRunError(err);
       }
-      // Leave Monaco waiting: the previous decorations stay, the engine has
-      // already reported the error, and the next edit starts a fresh run.
+      // Leave Monaco waiting: a superseded run has a newer run behind it, and
+      // after an error the previous decorations stay until the next edit.
       return new Promise<IDocumentDiff>(() => {});
     }
   }
@@ -124,10 +244,6 @@ class EngineDiffProvider {
     liveProviders.delete(this);
     this.emitter.dispose();
   }
-}
-
-function worker() {
-  return StandaloneServices.get(IEditorWorkerService);
 }
 
 function isEmptyModel(m: TextModel): boolean {
@@ -149,42 +265,14 @@ function trivialDiff(original: TextModel, modified: TextModel): IDocumentDiff | 
 }
 
 // --- ignore all whitespace -------------------------------------------------
-// Hidden "shadow" models hold each side with all non-newline whitespace
-// removed. Line numbers are identical to the real model, so line mappings
-// apply as-is; intra-line ranges are mapped back column by column. The real
-// models (what the user sees and getText returns) are never touched.
+// The worker diffs each side with all non-newline whitespace removed. Line
+// numbers are identical to the real model, so line mappings apply as-is;
+// intra-line ranges are mapped back column by column. The real models (what
+// the user sees and getText returns) are never touched.
 
-interface Shadow {
-  model: TextModel;
-  version: number;
-}
-
-const shadows = new Map<TextModel, Shadow>();
-let shadowSeq = 0;
-let shadowInflight = 0;
-
-function shadowFor(real: TextModel): TextModel {
-  let s = shadows.get(real);
-  if (s && s.version === real.getVersionId() && !s.model.isDisposed()) return s.model;
-  const text = stripWhitespace(real.getValue());
-  if (s && !s.model.isDisposed()) {
-    s.model.setValue(text);
-    s.version = real.getVersionId();
-    return s.model;
-  }
-  const model = monaco.editor.createModel(text, 'plaintext', monaco.Uri.parse(`inmemory://sidediff/shadow/${++shadowSeq}`));
-  s = { model, version: real.getVersionId() };
-  shadows.set(real, s);
-  real.onWillDispose(() => {
-    shadows.get(real)?.model.dispose();
-    shadows.delete(real);
-  });
-  return model;
-}
-
-function disposeShadows(): void {
-  for (const s of shadows.values()) s.model.dispose();
-  shadows.clear();
+function strippedSide(m: TextModel): SideText {
+  const side = sideOf(m);
+  return { key: `stripped:${side.key}`, text: () => stripWhitespace(m.getValue()) };
 }
 
 function mapRange(r: monaco.Range, real: TextModel): monaco.Range {
@@ -200,17 +288,9 @@ async function computeIgnoringAllWhitespace(
   original: TextModel,
   modified: TextModel,
   opts: IDocumentDiffProviderOptions,
-): Promise<IDocumentDiff | null> {
-  const so = shadowFor(original);
-  const sm = shadowFor(modified);
-  shadowInflight++;
-  let r: IDocumentDiff | null;
-  try {
-    r = await worker().computeDiff(so.uri, sm.uri, opts, 'advanced');
-  } finally {
-    shadowInflight--;
-  }
-  if (!r || original.isDisposed() || modified.isDisposed()) return r;
+): Promise<IDocumentDiff> {
+  const r = await diffWorker.compute(strippedSide(original), strippedSide(modified), opts);
+  if (original.isDisposed() || modified.isDisposed()) return r;
   return {
     ...r,
     changes: r.changes.map(

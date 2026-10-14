@@ -1,6 +1,6 @@
 // Dev-only test page for the engine: /src/editor/harness.html. Not part of the app.
 import { createDiffEngine } from './index';
-import { isDiffProviderActive } from './diff-provider';
+import { isDiffProviderActive, supersededRuns } from './diff-provider';
 import { monaco } from './monaco-setup';
 import type { DiffEngine, DiffOptions } from '../types';
 
@@ -10,6 +10,7 @@ declare global {
     __gen?: (lines: number) => { a: string; b: string };
     __log?: string[];
     __providerActive?: () => boolean;
+    __supersededRuns?: () => number;
     __monacoModified?: () => monaco.editor.ICodeEditor | undefined;
   }
 }
@@ -90,6 +91,7 @@ const engine = createDiffEngine();
 window.__engine = engine;
 window.__gen = gen;
 window.__providerActive = isDiffProviderActive;
+window.__supersededRuns = supersededRuns;
 // Test-only: the right-hand editor (its model URI is inmemory://sidediff/b/N).
 window.__monacoModified = () => monaco.editor.getEditors().find((e) => e.getModel()?.uri.path.startsWith('/b/'));
 const logLines: string[] = [];
