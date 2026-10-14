@@ -33,6 +33,8 @@ export interface DiffController {
   lineLevelOnly: boolean;
   /** Overrides the options' maxComputationTimeMs when not null. */
   maxComputationTimeMs: number | null;
+  /** False for models that are no longer on screen (a replaced view model's late debounced run). */
+  isCurrent(original: TextModel, modified: TextModel): boolean;
   onRunStart(original: TextModel, modified: TextModel): void;
   onRunEnd(info: DiffRunInfo): void;
   onRunError(err: unknown): void;
@@ -201,6 +203,10 @@ class EngineDiffProvider {
     if (original.isDisposed() || modified.isDisposed()) {
       return { changes: [], identical: true, quitEarly: false, moves: [] };
     }
+    // Replaced models stay alive on the undo history (D13), and their old view
+    // model can still fire a debounced run. It must never supersede the run
+    // for what is on screen; nobody waits for its result.
+    if (ctl && !ctl.isCurrent(original, modified)) return new Promise<IDocumentDiff>(() => {});
     ctl?.onRunStart(original, modified);
     const t0 = performance.now();
     try {

@@ -1,12 +1,15 @@
 // Dev-only test page for the engine: /src/editor/harness.html. Not part of the app.
-import { createDiffEngine } from './index';
+import { createDiffEngine, liveModelCount } from './index';
+import type { SideDiffEngine } from './index';
 import { isDiffProviderActive, supersededRuns } from './diff-provider';
 import { monaco } from './monaco-setup';
-import type { DiffEngine, DiffOptions } from '../types';
+import type { DiffOptions } from '../types';
 
 declare global {
   interface Window {
-    __engine?: DiffEngine;
+    __engine?: SideDiffEngine;
+    __liveModels?: () => number;
+    __createEngine?: () => SideDiffEngine;
     __gen?: (lines: number) => { a: string; b: string };
     __log?: string[];
     __providerActive?: () => boolean;
@@ -90,10 +93,13 @@ function gen(target: number): { a: string; b: string } {
 const engine = createDiffEngine();
 window.__engine = engine;
 window.__gen = gen;
+window.__liveModels = liveModelCount;
+window.__createEngine = createDiffEngine;
 window.__providerActive = isDiffProviderActive;
 window.__supersededRuns = supersededRuns;
-// Test-only: the right-hand editor (its model URI is inmemory://sidediff/b/N).
-window.__monacoModified = () => monaco.editor.getEditors().find((e) => e.getModel()?.uri.path.startsWith('/b/'));
+// Test-only: the right-hand editor of the harness diff editor.
+window.__monacoModified = () =>
+  monaco.editor.getEditors().find((e) => e.getDomNode()?.classList.contains('modified-in-monaco-diff-editor') && e.getDomNode()?.closest('#editor'));
 const logLines: string[] = [];
 window.__log = logLines;
 

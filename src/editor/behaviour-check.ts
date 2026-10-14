@@ -391,6 +391,222 @@ async function main(): Promise<void> {
     `wrapped ${JSON.stringify(wrapBefore)} → after inline trip ${JSON.stringify(wrapAfter)}; wrap off ${JSON.stringify(unwrapped)}`,
   );
 
+  // --- whole-text undo (D13) ------------------------------------------------
+  const waitDone = (): Promise<void> =>
+    page.evaluate(
+      () =>
+        new Promise<void>((r) => {
+          const off = window.__engine!.on('diff:done', () => {
+            off();
+            r();
+          });
+        }),
+    );
+  const settle = async (action: () => Promise<unknown>): Promise<void> => {
+    const d = waitDone();
+    await action();
+    await d;
+  };
+  await settle(() =>
+    page.evaluate(() => {
+      const e = window.__engine!;
+      e.setText('a', 'alpha 1\r\nalpha 2\n\talpha 3 é中\n');
+      e.setText('b', 'beta 1\nbeta 2\n');
+    }),
+  );
+  const undoClear = await page.evaluate(() => {
+    const e = window.__engine!;
+    const events: string[] = [];
+    const off = e.on('history', (h) => events.push(`${h.action}:${h.side}:${h.reason}`));
+    const before = e.getText('b');
+    e.replaceText('b', '', 'clear');
+    const cleared = e.getText('b') === '';
+    const undone = e.undoReplace('b') && e.getText('b') === before;
+    const redone = e.redoReplace('b') && e.getText('b') === '';
+    e.undoReplace();
+    off();
+    return { cleared, undone, redone, back: e.getText('b') === before, events: events.join(' ') };
+  });
+  check(
+    'undo/redo of clear restores B byte-identical',
+    undoClear.cleared && undoClear.undone && undoClear.redone && undoClear.back && undoClear.events === 'undo:b:clear redo:b:clear undo:b:clear',
+    JSON.stringify(undoClear),
+  );
+
+  // Paste-replace-all, then Ctrl+Z / Ctrl+Y from the keyboard inside pane A.
+  const textA0 = await page.evaluate(() => window.__engine!.getText('a'));
+  await page.evaluate(() => window.__engine!.focus('a'));
+  await page.keyboard.press('Control+a');
+  await page.evaluate(() => {
+    const dt = new DataTransfer();
+    dt.setData('text/plain', 'pasted\nover everything\n');
+    (document.activeElement as HTMLElement).dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+  });
+  const afterPaste = await page.evaluate(() => window.__engine!.getText('a'));
+  await page.evaluate(() => window.__engine!.focus('a'));
+  await page.keyboard.press('Control+z');
+  const afterUndo = await page.evaluate(() => window.__engine!.getText('a'));
+  await page.keyboard.press('Control+y');
+  const afterRedo = await page.evaluate(() => window.__engine!.getText('a'));
+  await page.keyboard.press('Control+Shift+z'); // nothing left to redo: no change
+  const afterRedo2 = await page.evaluate(() => window.__engine!.getText('a'));
+  check(
+    'paste-replace: Ctrl+Z restores, Ctrl+Y re-applies (keyboard, in the pane)',
+    afterPaste === 'pasted\nover everything\n' && afterUndo === textA0 && afterRedo === afterPaste && afterRedo2 === afterPaste,
+    JSON.stringify({ afterPaste, afterUndo: afterUndo === textA0, afterRedo: afterRedo === afterPaste }),
+  );
+
+  // Typed edits stay on Monaco's own stack; once it is empty Ctrl+Z falls through.
+  await page.evaluate(() => window.__engine!.focus('a'));
+  await page.keyboard.press('Control+Home');
+  await page.keyboard.type('zz');
+  const typed = await page.evaluate(() => window.__engine!.getText('a'));
+  await page.keyboard.press('Control+z');
+  const typedUndone = await page.evaluate(() => window.__engine!.getText('a'));
+  await page.keyboard.press('Control+z');
+  const fellThrough = await page.evaluate(() => window.__engine!.getText('a'));
+  check(
+    'typed edit undoes on Monaco stack first, then Ctrl+Z falls through to the replace',
+    typed.startsWith('zzpasted') && typedUndone === afterPaste && fellThrough === textA0,
+    JSON.stringify({ typed: typed.slice(0, 12), typedUndone: typedUndone === afterPaste, fellThrough: fellThrough === textA0 }),
+  );
+
+  // Load and swap; typing after an undo clears that side's redo.
+  const loadSwap = await page.evaluate(() => {
+    const e = window.__engine!;
+    const a0 = e.getText('a');
+    const b0 = e.getText('b');
+    e.replaceText('a', 'loaded\n', 'load');
+    const loadUndo = e.undoReplace('a') && e.getText('a') === a0;
+    e.swap();
+    const swapped = e.getText('a') === b0 && e.getText('b') === a0;
+    let side = '';
+    const off = e.on('history', (h) => (side = `${h.side}:${h.reason}`));
+    const swapUndo = e.undoReplace() && e.getText('a') === a0 && e.getText('b') === b0;
+    off();
+    const canRedoSwap = e.canRedoReplace('a');
+    return { loadUndo, swapped, swapUndo, side, canRedoSwap };
+  });
+  check(
+    'load undoes; swap undoes in one step for both sides',
+    loadSwap.loadUndo && loadSwap.swapped && loadSwap.swapUndo && loadSwap.side === 'both:swap' && loadSwap.canRedoSwap,
+    JSON.stringify(loadSwap),
+  );
+  await page.evaluate(() => window.__engine!.focus('a'));
+  await page.keyboard.type('q');
+  const redoCleared = await page.evaluate(() => ({ a: window.__engine!.canRedoReplace('a'), b: window.__engine!.canRedoReplace('b') }));
+  check('typing after an undo clears that side\'s redo (swap touched both)', !redoCleared.a && !redoCleared.b, JSON.stringify(redoCleared));
+
+  const bound = await page.evaluate(() => {
+    const e = window.__engine!;
+    for (let i = 0; i < 14; i++) e.replaceText('b', `b${i}\n`, 'set');
+    let undos = 0;
+    while (e.undoReplace('b')) undos++;
+    return { undos, text: e.getText('b') };
+  });
+  check('history keeps 10 entries per side', bound.undos === 10 && bound.text === 'b3\n', JSON.stringify(bound));
+
+  // --- item views ---------------------------------------------------------
+  await settle(() =>
+    page.evaluate(() => {
+      const g = window.__gen!(30_000);
+      const w = window as unknown as { __VA: string; __VB: string };
+      w.__VA = g.a;
+      w.__VB = g.b;
+      window.__engine!.setText('a', g.a);
+      window.__engine!.setText('b', g.b);
+    }),
+  );
+  await page.evaluate(() => window.__engine!.setOptions({ diffOnly: true }));
+  await page.evaluate(() => window.__engine!.goToChange(40));
+  await page.waitForTimeout(400);
+  const fullState = await page.evaluate(() => {
+    const m = window.__monacoModified!()!;
+    return { top: m.getScrollTop(), line: m.getPosition()?.lineNumber, pos: window.__engine!.getPosition().index };
+  });
+  const viewEvents: string[] = [];
+  await page.exposeFunction('__viewEvent', (k: string) => viewEvents.push(k));
+  await page.evaluate(() => {
+    window.__engine!.on('view', (v) => (window as unknown as { __viewEvent: (k: string) => void }).__viewEvent(String(v.key)));
+  });
+  await settle(() =>
+    page.evaluate(() =>
+      window.__engine!.openView({ key: 'Graph:Foo#code', a: 'class Foo {\n  int x = 1;\n}\n', b: 'class Foo {\n  int x = 2;\n}\n', language: 'csharp' }),
+    ),
+  );
+  const inView = await page.evaluate(() => {
+    const e = window.__engine!;
+    const w = window as unknown as { __VA: string; __VB: string };
+    return { key: e.getView(), stats: e.getStats(), full: e.getText('a') === w.__VA && e.getText('b') === w.__VB };
+  });
+  await page.evaluate(() => window.__engine!.focus('b'));
+  await page.keyboard.type('typed into view');
+  const readOnly = await page.evaluate(() => {
+    const m = window.__monacoModified!()?.getModel();
+    return m?.getValue() === 'class Foo {\n  int x = 2;\n}\n';
+  });
+  await page.screenshot({ path: `${SHOT}/item-view.png` });
+  await settle(() => page.evaluate(() => window.__engine!.closeView()));
+  await page.waitForTimeout(200);
+  const restored = await page.evaluate(() => {
+    const m = window.__monacoModified!()!;
+    return { top: m.getScrollTop(), line: m.getPosition()?.lineNumber, key: window.__engine!.getView() };
+  });
+  check(
+    'item view: shows the item, read-only, full texts untouched',
+    inView.key === 'Graph:Foo#code' && inView.stats?.changes === 1 && inView.stats.modified === 1 && inView.full && readOnly,
+    JSON.stringify({ ...inView, readOnly }),
+  );
+  check(
+    'closeView restores the full view scroll and cursor',
+    restored.key === null && restored.top === fullState.top && restored.line === fullState.line && viewEvents.join(',') === 'Graph:Foo#code,null',
+    JSON.stringify({ fullState, restored, viewEvents }),
+  );
+
+  await settle(() => page.evaluate(() => window.__engine!.openView({ key: 'Sql:X#code', a: null, b: 'select 1\nfrom t\n', language: 'plaintext' })));
+  const nullSide = await page.evaluate(() => window.__engine!.getStats());
+  const replaceInView = await page.evaluate(() => {
+    const e = window.__engine!;
+    e.replaceText('a', 'changed full A\n', 'load');
+    return { key: e.getView(), full: e.getText('a') };
+  });
+  await settle(() => page.evaluate(() => window.__engine!.closeView()));
+  const afterClose = await page.evaluate(() => ({ stats: window.__engine!.getStats(), a: window.__engine!.getText('a') }));
+  check(
+    'view with a null side; replaceText during a view updates the full text only',
+    nullSide?.added === 3 && nullSide.linesA === 1 && replaceInView.key === 'Sql:X#code' && replaceInView.full === 'changed full A\n' && afterClose.a === 'changed full A\n',
+    JSON.stringify({ nullSide, replaceInView, afterClose: afterClose.stats }),
+  );
+
+  await settle(() => page.evaluate(() => window.__engine!.openView({ key: 'k', a: 'a\n', b: 'b\n', language: 'xml' })));
+  await settle(() => page.evaluate(() => window.__engine!.revealLine('b', 20_000)));
+  const revealed = await page.evaluate(() => {
+    const m = window.__monacoModified!()!;
+    const line = m.getPosition()?.lineNumber ?? 0;
+    return { key: window.__engine!.getView(), line, visible: m.getVisibleRanges().some((r) => r.startLineNumber <= line && line <= r.endLineNumber) };
+  });
+  check('revealLine closes the view and centres the line', revealed.key === null && revealed.line === 20_000 && revealed.visible, JSON.stringify(revealed));
+  await page.evaluate(() => window.__engine!.setOptions({ diffOnly: false }));
+
+  // dispose() frees every model the engine made, history and views included.
+  const leak = await page.evaluate(() => {
+    const before = window.__liveModels!();
+    const host = document.createElement('div');
+    host.style.cssText = 'position:absolute;width:400px;height:200px;left:-9999px';
+    document.body.append(host);
+    const e2 = window.__createEngine!();
+    e2.mount(host);
+    for (let i = 0; i < 5; i++) e2.replaceText('a', `x${i}\n`, 'load');
+    e2.swap();
+    e2.undoReplace();
+    e2.openView({ key: 'v', a: 'p\n', b: null, language: 'plaintext' });
+    const during = window.__liveModels!();
+    e2.dispose();
+    host.remove();
+    return { before, during, after: window.__liveModels!() };
+  });
+  check('dispose frees every kept model', leak.during > leak.before && leak.after === leak.before, JSON.stringify(leak));
+
   check('no console errors', errors.length === 0, errors.slice(0, 5).join(' | '));
   await browser.close();
   console.log(failures ? `${failures} FAILED` : 'ALL PASSED');

@@ -9,13 +9,18 @@ import type {
   DiffEngineEvents,
   DiffOptions,
   DiffStats,
+  ItemView,
+  ItemViewApi,
   LanguageId,
+  ReplaceReason,
   Side,
+  TextHistoryApi,
   ThemeId,
   Unsubscribe,
 } from '../types';
 import { invalidateDiffs, setDiffController } from './diff-provider';
 import type { DiffController, DiffRunInfo } from './diff-provider';
+import { ReplaceHistory } from './history';
 import {
   DIFF_TIMEOUT_MS,
   clampContextLines,
@@ -105,7 +110,19 @@ const BASE_EDITOR_OPTIONS: monaco.editor.IDiffEditorConstructionOptions = {
   matchBrackets: 'always',
 };
 
-export function createDiffEngine(): DiffEngine {
+export type SideDiffEngine = DiffEngine & ItemViewApi & TextHistoryApi;
+
+interface OpenView {
+  key: string;
+  models: Record<Side, TextModel>;
+  language: LanguageId;
+  /** Full-text view state when the view opened, restored by closeView. */
+  saved: monaco.editor.IDiffEditorViewState | null;
+  /** The full models that `saved` belongs to. */
+  savedModels: Record<Side, TextModel>;
+}
+
+export function createDiffEngine(): SideDiffEngine {
   const listeners = new Map<keyof DiffEngineEvents, Set<(p: never) => void>>();
   const disposables: monaco.IDisposable[] = [];
   const domCleanups: (() => void)[] = [];
@@ -114,6 +131,7 @@ export function createDiffEngine(): DiffEngine {
   let options: DiffOptions = { ...DEFAULT_SETTINGS.diff };
   let language: LanguageId = 'plaintext';
   let modelSeq = 0;
+  /** The full texts. getText() always reads these, even while an item view is shown. */
   const models: Record<Side, TextModel> = {
     a: monaco.editor.createModel('', language, nextUri('a')),
     b: monaco.editor.createModel('', language, nextUri('b')),
@@ -122,6 +140,7 @@ export function createDiffEngine(): DiffEngine {
   let degraded: DegradedInfo | null = null;
   let attachScheduled = false;
   let pendingDispose: TextModel[] = [];
+  let view: OpenView | null = null;
 
   // Diff lifecycle.
   let computing = false;
@@ -140,8 +159,13 @@ export function createDiffEngine(): DiffEngine {
   let placedLine: number | null = null;
   let lastFocused: Side = 'b';
 
-  function nextUri(side: Side): monaco.Uri {
+  function nextUri(side: Side | 'view-a' | 'view-b'): monaco.Uri {
     return monaco.Uri.parse(`inmemory://sidediff/${side}/${++modelSeq}`);
+  }
+
+  /** What the diff editor shows: the item view's models, or the full texts. */
+  function shown(): Record<Side, TextModel> {
+    return view ? view.models : models;
   }
 
   function emit<K extends keyof DiffEngineEvents>(event: K, payload: DiffEngineEvents[K]): void {
@@ -163,12 +187,31 @@ export function createDiffEngine(): DiffEngine {
     return diffEditor.getModifiedEditor();
   }
 
+  /** Disposes a model now, or once the diff editor no longer shows it. */
+  function release(m: TextModel): void {
+    if (m.isDisposed()) return;
+    const cur = diffEditor?.getModel();
+    if (cur?.original === m || cur?.modified === m || attachScheduled) pendingDispose.push(m);
+    else m.dispose();
+  }
+
+  const history = new ReplaceHistory<TextModel>({
+    size: (m) => (m.isDisposed() ? 0 : m.getValueLength()),
+    drop: release,
+  });
+
   // --- options / degraded -------------------------------------------------
+
+  /** Degraded mode describes the full texts; item views are always small enough. */
+  function effectiveDegraded(): boolean {
+    return degraded !== null && view === null;
+  }
 
   function applyEditorOptions(): void {
     if (!diffEditor) return;
-    const mapped = mapDiffOptions(options, degraded !== null);
-    diffEditor.updateOptions(mapped);
+    const mapped = mapDiffOptions(options, effectiveDegraded());
+    ctl.lineLevelOnly = effectiveDegraded();
+    diffEditor.updateOptions({ ...mapped, readOnly: view !== null, originalEditable: view === null });
     // The DiffEditor forces minimap and folding off on both sides on every
     // updateOptions; set them on the sub-editors directly afterwards.
     const sub = { minimap: mapped.minimap, folding: mapped.folding };
@@ -182,7 +225,8 @@ export function createDiffEngine(): DiffEngine {
       tabIndex: mapped.renderSideBySide ? 0 : -1,
       ...(mapped.renderSideBySide ? { wordWrapOverride2: 'inherit' as const } : {}),
     });
-    diffEditor.getModifiedEditor().updateOptions(sub);
+    // Item views are read-only; the DiffEditor does not pass readOnly on to the right-hand editor.
+    diffEditor.getModifiedEditor().updateOptions({ ...sub, readOnly: view !== null });
   }
 
   function measure(side: Side): void {
@@ -198,7 +242,6 @@ export function createDiffEngine(): DiffEngine {
     degraded = next;
     if (!changed) return;
     emit('degraded', next);
-    ctl.lineLevelOnly = next !== null;
     applyEditorOptions();
     invalidateDiffs();
   }
@@ -214,7 +257,8 @@ export function createDiffEngine(): DiffEngine {
     computing = true;
     waitStart = performance.now();
     mark('sidediff:diff-start');
-    emit('diff:start', { linesA: sizes.a.lines, linesB: sizes.b.lines });
+    const s = shown();
+    emit('diff:start', { linesA: s.a.getLineCount(), linesB: s.b.getLineCount() });
     clearTimeout(watchdog);
     watchdog = setTimeout(() => {
       if (!computing) return;
@@ -232,8 +276,13 @@ export function createDiffEngine(): DiffEngine {
     ignoreAllWhitespace: options.ignoreAllWhitespace,
     lineLevelOnly: false,
     maxComputationTimeMs: null,
+    isCurrent(original, modified) {
+      const s = shown();
+      return original === s.a && modified === s.b;
+    },
     onRunStart(original, modified) {
-      if (original !== models.a || modified !== models.b) return;
+      const s = shown();
+      if (original !== s.a || modified !== s.b) return;
       inflight++;
       lastRun = null;
       beginWait();
@@ -261,10 +310,11 @@ export function createDiffEngine(): DiffEngine {
     revealLines = changes.map((c) => Math.max(1, c.modifiedStartLineNumber));
     if (!computing) beginWait();
     const computeMs = run ? run.ms : performance.now() - waitStart;
+    const s = shown();
     stats = {
       ...countHunks(hunks),
-      linesA: models.a.getLineCount(),
-      linesB: models.b.getLineCount(),
+      linesA: s.a.getLineCount(),
+      linesB: s.b.getLineCount(),
       computeMs: Math.round(computeMs),
       identical: result ? result.identical : changes.length === 0,
       quitEarly: run ? run.quitEarly : (result?.quitEarly ?? false),
@@ -288,12 +338,14 @@ export function createDiffEngine(): DiffEngine {
   function attachModels(): void {
     attachScheduled = false;
     if (!diffEditor) return;
+    const s = shown();
     const current = diffEditor.getModel();
-    if (current?.original !== models.a || current?.modified !== models.b) {
-      diffEditor.setModel({ original: models.a, modified: models.b });
+    if (current?.original !== s.a || current?.modified !== s.b) {
+      diffEditor.setModel({ original: s.a, modified: s.b });
     }
-    for (const m of pendingDispose) if (m !== models.a && m !== models.b && !m.isDisposed()) m.dispose();
-    pendingDispose = [];
+    const keep = pendingDispose.filter((m) => m === s.a || m === s.b);
+    for (const m of pendingDispose) if (!keep.includes(m) && !m.isDisposed()) m.dispose();
+    pendingDispose = keep;
   }
 
   function scheduleAttach(): void {
@@ -304,24 +356,167 @@ export function createDiffEngine(): DiffEngine {
     queueMicrotask(attachModels);
   }
 
-  function replaceModel(side: Side, text: string): void {
+  /** Puts `model` on `side` of the full texts (no history bookkeeping). */
+  function setSideModel(side: Side, model: TextModel): void {
+    models[side] = model;
+    if (model.getLanguageId() !== language) monaco.editor.setModelLanguage(model, language);
+    measure(side);
+    afterFullTextChange([side]);
+  }
+
+  /** Shared tail of every whole-text change on the full models. */
+  function afterFullTextChange(sides: Side[]): void {
+    if (!view) {
+      setPosition(0, position.total);
+      placedLine = null;
+    }
+    if (diffEditor && !view) {
+      scheduleAttach();
+      for (const side of sides) afterNextFrame(() => mark(`sidediff:first-render:${side}`));
+    }
+    for (const side of sides) emitContent(side);
+    updateDegraded();
+    // While an item view is shown the full texts are not diffed, so there is
+    // no run to wait for.
+    if (diffEditor && !view) beginWait();
+  }
+
+  function replaceModel(side: Side, text: string, reason: ReplaceReason): void {
     mark(`sidediff:text-set:${side}`);
     const old = models[side];
     // A fresh model (instead of setValue) lets Monaco's large-file checks,
     // which run only at construction, turn off tokenization above 20 MB / 300k
-    // lines, and drops the old undo stack with the old text.
-    models[side] = monaco.editor.createModel(text, language, nextUri(side));
-    pendingDispose.push(old);
-    measure(side);
-    setPosition(0, position.total);
-    placedLine = null;
-    if (diffEditor) {
-      scheduleAttach();
-      afterNextFrame(() => mark(`sidediff:first-render:${side}`));
+    // lines. The replaced model goes on the history (D13), undo stack and all.
+    const fresh = monaco.editor.createModel(text, language, nextUri(side));
+    history.record({ sides: [side], reason, models: { [side]: old } });
+    setSideModel(side, fresh);
+  }
+
+  function swapModels(): void {
+    const a = models.a;
+    models.a = models.b;
+    models.b = a;
+    const s = sizes.a;
+    sizes.a = sizes.b;
+    sizes.b = s;
+    afterFullTextChange(['a', 'b']);
+  }
+
+  // --- whole-text undo ------------------------------------------------------
+
+  function undoOrRedo(action: 'undo' | 'redo', side?: Side): boolean {
+    const entry = action === 'undo' ? history.takeUndo(side) : history.takeRedo(side);
+    if (!entry) return false;
+    const back = action === 'undo' ? history.pushRedo.bind(history) : history.pushUndo.bind(history);
+    if (entry.sides.length === 2) {
+      // Swap: swapping again restores the other arrangement.
+      swapModels();
+      back({ sides: ['a', 'b'], reason: entry.reason, models: {} });
+      emit('history', { side: 'both', action, reason: entry.reason });
+      return true;
     }
-    emitContent(side);
-    updateDegraded();
-    if (diffEditor) beginWait();
+    const s = entry.sides[0]!;
+    const target = entry.models[s];
+    if (!target || target.isDisposed()) return false;
+    const current = models[s];
+    setSideModel(s, target);
+    back({ sides: [s], reason: entry.reason, models: { [s]: current } });
+    emit('history', { side: s, action, reason: entry.reason });
+    return true;
+  }
+
+  /** Ctrl+Z / Ctrl+Y in a focused pane: Monaco's own stack first, then the whole-text history. */
+  function keyUndoRedo(action: 'undo' | 'redo'): void {
+    if (!diffEditor) return;
+    const side: Side | null = diffEditor.getOriginalEditor().hasTextFocus()
+      ? 'a'
+      : diffEditor.getModifiedEditor().hasTextFocus()
+        ? 'b'
+        : null;
+    if (!side) return;
+    const ed = side === 'a' ? diffEditor.getOriginalEditor() : diffEditor.getModifiedEditor();
+    const model = ed.getModel();
+    if (!model) return;
+    const own = action === 'undo' ? model.canUndo() : model.canRedo();
+    if (own) {
+      ed.trigger('keyboard', action, null);
+      return;
+    }
+    // Item views are read-only; whole-text undo would change texts that are not on screen.
+    if (view) return;
+    undoOrRedo(action, side);
+  }
+
+  // --- item views -----------------------------------------------------------
+
+  function openItemView(v: ItemView): void {
+    const previous = view;
+    const saved = previous ? previous.saved : (diffEditor?.saveViewState() ?? null);
+    const savedModels = previous ? previous.savedModels : { a: models.a, b: models.b };
+    view = {
+      key: v.key,
+      language: v.language,
+      saved,
+      savedModels,
+      models: {
+        a: monaco.editor.createModel(v.a ?? '', v.language, nextUri('view-a')),
+        b: monaco.editor.createModel(v.b ?? '', v.language, nextUri('view-b')),
+      },
+    };
+    if (previous) {
+      release(previous.models.a);
+      release(previous.models.b);
+    }
+    restoreView = null;
+    setPosition(0, 0, true);
+    placedLine = null;
+    revealLines = [];
+    stats = null;
+    applyEditorOptions();
+    if (diffEditor) {
+      attachModels();
+      diffEditor.getModifiedEditor().setScrollTop(0);
+      beginWait();
+    }
+    emit('view', { key: v.key });
+  }
+
+  function closeItemView(after?: () => void): void {
+    if (!view) return;
+    const closing = view;
+    view = null;
+    release(closing.models.a);
+    release(closing.models.b);
+    setPosition(0, 0, true);
+    placedLine = null;
+    revealLines = [];
+    stats = null;
+    applyEditorOptions();
+    if (diffEditor) {
+      const ed = diffEditor;
+      const sameModels = closing.savedModels.a === models.a && closing.savedModels.b === models.b;
+      // Restore once the diff (and with diff only, its collapsed regions) is back.
+      restoreView = () => {
+        if (closing.saved && sameModels) ed.restoreViewState(closing.saved);
+        after?.();
+      };
+      attachModels();
+      beginWait();
+    } else {
+      after?.();
+    }
+    emit('view', { key: null });
+  }
+
+  function revealFullLine(side: Side, line: number): void {
+    const ed = editorFor(side);
+    if (!ed) return;
+    const model = ed.getModel();
+    const n = Math.min(Math.max(1, Math.round(line)), model?.getLineCount() ?? 1);
+    // The cursor move also expands a collapsed region hiding the line.
+    ed.setPosition({ lineNumber: n, column: 1 });
+    ed.revealLineInCenter(n, monaco.editor.ScrollType.Immediate);
+    ed.focus();
   }
 
   // --- navigation ---------------------------------------------------------
@@ -359,6 +554,8 @@ export function createDiffEngine(): DiffEngine {
   function installPaste(side: Side, ed: CodeEditor): void {
     const node = ed.getContainerDomNode();
     const onPaste = (e: ClipboardEvent): void => {
+      // Item views are read-only: let Monaco show its read-only notice.
+      if (view) return;
       const text = e.clipboardData?.getData('text/plain');
       if (text === undefined || text === '') return;
       const model = models[side];
@@ -369,7 +566,7 @@ export function createDiffEngine(): DiffEngine {
         // Fast path: build a new model straight from the clipboard string.
         e.preventDefault();
         e.stopImmediatePropagation();
-        replaceModel(side, text);
+        replaceModel(side, text, 'paste');
         ed.focus();
       } else if (text.length >= BIG_PASTE) {
         e.preventDefault();
@@ -404,9 +601,11 @@ export function createDiffEngine(): DiffEngine {
 
   function wireEditor(side: Side, ed: CodeEditor): void {
     disposables.push(
-      ed.onDidChangeModelContent(() => {
+      ed.onDidChangeModelContent((e) => {
         const m = ed.getModel();
         if (!m || m !== models[side]) return;
+        // Typing (not Monaco's own undo/redo) invalidates that side's whole-text redo.
+        if (!e.isUndoing && !e.isRedoing) history.clearRedo([side]);
         measure(side);
         emitContent(side);
         updateDegraded();
@@ -421,24 +620,41 @@ export function createDiffEngine(): DiffEngine {
 
   // --- engine -------------------------------------------------------------
 
-  const engine: DiffEngine = {
+  const engine: SideDiffEngine = {
     mount(container) {
       if (diffEditor) throw new Error('DiffEngine.mount: already mounted');
       diffEditor = monaco.editor.createDiffEditor(container, {
         ...BASE_EDITOR_OPTIONS,
-        ...mapDiffOptions(options, degraded !== null),
+        ...mapDiffOptions(options, effectiveDegraded()),
       });
       applyEditorOptions();
       installSeparatorClick(container);
       wireEditor('a', diffEditor.getOriginalEditor());
       wireEditor('b', diffEditor.getModifiedEditor());
       disposables.push(diffEditor.onDidUpdateDiff(onDiffUpdated));
+      // Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z while a pane has text focus (D13).
+      const { KeyMod, KeyCode } = monaco;
+      const undoId = `sidediff.undo.${++modelSeq}`;
+      const redoId = `sidediff.redo.${modelSeq}`;
+      disposables.push(
+        monaco.editor.addCommand({ id: undoId, run: () => keyUndoRedo('undo') }),
+        monaco.editor.addCommand({ id: redoId, run: () => keyUndoRedo('redo') }),
+        monaco.editor.addKeybindingRules([
+          { keybinding: KeyMod.CtrlCmd | KeyCode.KeyZ, command: undoId, when: 'editorTextFocus' },
+          { keybinding: KeyMod.CtrlCmd | KeyCode.KeyY, command: redoId, when: 'editorTextFocus' },
+          { keybinding: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyZ, command: redoId, when: 'editorTextFocus' },
+        ]),
+      );
       attachModels();
       beginWait();
     },
 
     setText(side, text) {
-      replaceModel(side, text);
+      replaceModel(side, text, 'set');
+    },
+
+    replaceText(side, text, reason) {
+      replaceModel(side, text, reason);
     },
 
     getText(side) {
@@ -449,6 +665,11 @@ export function createDiffEngine(): DiffEngine {
       language = id;
       monaco.editor.setModelLanguage(models.a, id);
       monaco.editor.setModelLanguage(models.b, id);
+      if (view) {
+        view.language = id;
+        monaco.editor.setModelLanguage(view.models.a, id);
+        monaco.editor.setModelLanguage(view.models.b, id);
+      }
     },
 
     setOptions(partial) {
@@ -484,7 +705,8 @@ export function createDiffEngine(): DiffEngine {
       applyEditorOptions();
       if (diffOnlyChanged) afterNextFrame(() => mark('sidediff:diffonly-done'));
       if (reattach && diffEditor) {
-        diffEditor.setModel({ original: models.a, modified: models.b });
+        const s = shown();
+        diffEditor.setModel({ original: s.a, modified: s.b });
         beginWait();
       }
       if (allWsChanged) invalidateDiffs();
@@ -495,21 +717,41 @@ export function createDiffEngine(): DiffEngine {
     },
 
     swap() {
-      const a = models.a;
-      models.a = models.b;
-      models.b = a;
-      const s = sizes.a;
-      sizes.a = sizes.b;
-      sizes.b = s;
-      setPosition(0, position.total);
-      placedLine = null;
-      if (diffEditor) {
-        scheduleAttach();
-        beginWait();
-      }
-      emitContent('a');
-      emitContent('b');
-      updateDegraded();
+      history.record({ sides: ['a', 'b'], reason: 'swap', models: {} });
+      swapModels();
+    },
+
+    undoReplace(side) {
+      return undoOrRedo('undo', side);
+    },
+
+    redoReplace(side) {
+      return undoOrRedo('redo', side);
+    },
+
+    canUndoReplace(side) {
+      return history.canUndo(side);
+    },
+
+    canRedoReplace(side) {
+      return history.canRedo(side);
+    },
+
+    openView(v) {
+      openItemView(v);
+    },
+
+    closeView() {
+      closeItemView();
+    },
+
+    getView() {
+      return view?.key ?? null;
+    },
+
+    revealLine(side, line) {
+      if (view) closeItemView(() => revealFullLine(side, line));
+      else revealFullLine(side, line);
     },
 
     nextChange() {
@@ -575,6 +817,13 @@ export function createDiffEngine(): DiffEngine {
       for (const d of disposables.splice(0)) d.dispose();
       diffEditor?.dispose();
       diffEditor = null;
+      attachScheduled = false;
+      history.clear();
+      if (view) {
+        view.models.a.dispose();
+        view.models.b.dispose();
+        view = null;
+      }
       models.a.dispose();
       models.b.dispose();
       for (const m of pendingDispose) if (!m.isDisposed()) m.dispose();
@@ -584,4 +833,9 @@ export function createDiffEngine(): DiffEngine {
   };
 
   return engine;
+}
+
+/** Test hook: every model Monaco still holds (dispose() must leave none of ours). */
+export function liveModelCount(): number {
+  return monaco.editor.getModels().filter((m) => m.uri.authority === 'sidediff').length;
 }

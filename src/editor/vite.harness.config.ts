@@ -11,5 +11,8 @@ export default mergeConfig(
     cacheDir: 'node_modules/.vite-editor-harness',
     // Scan the harness too, so every Monaco entry is pre-bundled in one pass.
     optimizeDeps: { entries: ['index.html', 'src/editor/harness.html'] },
+    // Other sessions edit the repo while checks run; without this, Vite
+    // reloads the harness page mid-test on every unrelated save.
+    server: { hmr: false },
   }),
 );
