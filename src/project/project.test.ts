@@ -254,9 +254,17 @@ describe('classifier table', () => {
     expect((await one(`<${el}><row DesignID="abc-123"/><row Name="Later"/></${el}>`)).id).toBe(`${el}:abc-123`);
   });
 
-  it.each(['EntityEndpoint', 'XportScenario', 'ImportScenario', 'WebHook', 'BusinessEvent'])('%s → integration by Name (+ Version)', async (el) => {
+  it.each(['EntityEndpoint', 'XportScenario', 'ImportScenario', 'WebHook', 'BusinessEvent'])('%s → integration by Name', async (el) => {
     expect(await one(`<${el} Name="Sync"/>`)).toMatchObject({ id: `${el}:Sync`, group: 'integration', name: 'Sync' });
-    expect((await one(`<${el} Name="Default" Version="23.200.001"/>`)).id).toBe(`${el}:Default 23.200.001`);
+  });
+
+  it('EntityEndpoint id is Name@Version when Version is present; other integration elements ignore Version', async () => {
+    const both = await buildIndex(proj('<EntityEndpoint Name="Default" Version="23.200.001"/>\n<EntityEndpoint Name="Default" Version="24.200.001"/>'), '');
+    expect(both.items.map((i) => [i.id, i.name, i.detail])).toEqual([
+      ['EntityEndpoint:Default@23.200.001', 'Default', 'Version 23.200.001'],
+      ['EntityEndpoint:Default@24.200.001', 'Default', 'Version 24.200.001'],
+    ]);
+    expect((await one('<WebHook Name="Hook" Version="2"/>')).id).toBe('WebHook:Hook');
   });
 
   it('unknown elements → other, name = identity, detail = element; generic keys, descendants, ordinal; CDATA as code', async () => {
@@ -446,5 +454,46 @@ describe.skipIf(!existsSync('fixtures/large-a.xml'))('large fixture (node timing
     expect(idx.sides.a.error).toBeUndefined();
     expect(idx.sides.b.error).toBeUndefined();
     console.info(`[project] large pair: ${idx.sides.a.items} items, scan A ${idx.sides.a.parseMs} ms, B ${idx.sides.b.parseMs} ms, buildIndex total ${ms.toFixed(0)} ms, counts ${JSON.stringify(idx.counts)}`);
+  });
+});
+
+describe.skipIf(!existsSync('fixtures/project-a.xml'))('project fixture pair vs fixtures/project.changes.json', () => {
+  it('every item matches the sidecar: id, group, name, status, views, line ranges, counts', async () => {
+    interface Expected {
+      id: string;
+      element: string;
+      group: string;
+      name: string;
+      detail: string;
+      status: string;
+      views: string[];
+      a: { startLine: number; endLine: number } | null;
+      b: { startLine: number; endLine: number } | null;
+    }
+    const oracle = JSON.parse(readFileSync('fixtures/project.changes.json', 'utf8')) as { items: Expected[]; counts: { total: number; byStatus: Record<string, number> } };
+    const idx = await buildIndex(readFileSync('fixtures/project-a.xml', 'utf8'), readFileSync('fixtures/project-b.xml', 'utf8'));
+    const got = new Map(idx.items.map((i) => [i.id, i]));
+    const diffs: string[] = [];
+    for (const e of oracle.items) {
+      // Until QA's sidecar follows 0998de6, accept `EntityEndpoint:<Name>` for `<Name>@<Version>`.
+      const legacy = e.element === 'EntityEndpoint' && !e.id.includes('@') ? [...got.keys()].filter((k) => k.startsWith(`${e.id}@`)) : [];
+      if (legacy.length === 1 && legacy[0]) e.id = legacy[0];
+      const g = got.get(e.id);
+      if (!g) {
+        diffs.push(`missing ${e.id}`);
+        continue;
+      }
+      got.delete(e.id);
+      // `detail` is left to the classifier tests: the sidecar predates e0d55ac's detail rules.
+      const actual = { element: g.element, group: g.group, name: g.name, status: g.status, views: g.views.map((v) => v.id), a: g.a, b: g.b };
+      const want = { element: e.element, group: e.group, name: e.name, status: e.status, views: e.views, a: e.a, b: e.b };
+      for (const k of Object.keys(want) as (keyof typeof want)[]) {
+        if (JSON.stringify(actual[k]) !== JSON.stringify(want[k])) diffs.push(`${e.id}.${k}: got ${JSON.stringify(actual[k])}, want ${JSON.stringify(want[k])}`);
+      }
+    }
+    for (const id of got.keys()) diffs.push(`unexpected ${id}`);
+    expect(diffs).toEqual([]);
+    expect(idx.items).toHaveLength(oracle.counts.total);
+    expect(idx.counts).toEqual(oracle.counts.byStatus);
   });
 });

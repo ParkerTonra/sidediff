@@ -231,7 +231,10 @@ export const RULES: readonly Rule[] = [
     elements: ['EntityEndpoint', 'XportScenario', 'ImportScenario', 'WebHook', 'BusinessEvent'],
     group: 'integration',
     keys: ['Name'],
-    identity: (it, base) => (it.attrs.Version ? `${base} ${it.attrs.Version}` : base),
+    // One endpoint name can exist in several versions (INTERFACES.md).
+    identity: (it, base) => (it.element === 'EntityEndpoint' && it.attrs.Version ? `${base}@${it.attrs.Version}` : base),
+    name: (it, id) => it.attrs.Name ?? id,
+    detail: (it) => (it.element === 'EntityEndpoint' && it.attrs.Version ? `Version ${it.attrs.Version}` : ''),
     code: () => null,
   },
 ];
