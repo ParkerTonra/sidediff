@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'self' https://cdn.jsdelivr.net" />
+    <title>Languages harness</title>
+    <style>body{background:#1e1e1e;color:#ccc;font:13px monospace;margin:8px}#editor{height:200px;border:1px solid #444}pre{white-space:pre-wrap}</style>
+  </head>
+  <body>
+    <div id="editor"></div>
+    <pre id="log"></pre>
+    <script type="module" src="./harness.ts"></script>
+  </body>
+</html>

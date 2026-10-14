@@ -1,32 +1,10 @@
-// The only file in src/languages that touches Monaco. Loaded with a dynamic
-// import from index.ts so the registry (and its tests) don't pull Monaco in,
-// and so vscode-textmate + the oniguruma WASM stay out of the initial bundle.
+// Remote TextMate packs → Monaco. Loaded with a dynamic import from index.ts
+// only when a remote pack activates, so vscode-textmate and the oniguruma
+// WASM stay out of the initial bundle (and the registry tests stay Monaco-free).
 import { monaco } from '../editor/monaco-setup';
 import onigWasmUrl from 'vscode-oniguruma/release/onig.wasm?url';
 import { createLineTokenizer, type LineTokenizer } from './textmate';
 import type { StateStack } from 'vscode-textmate';
-
-const PROBES: Record<string, string> = { csharp: 'using', xml: '<a>' };
-
-/**
- * csharp/xml are registered lazily by monaco-setup; `editor.tokenize` asks
- * Monaco to create the tokenizer. Wait until it actually produces tokens so
- * the first highlight after setLanguage isn't a frame of plain text.
- */
-export async function activateBundled(id: string): Promise<void> {
-  const probe = PROBES[id];
-  if (!probe) return; // plaintext is built into Monaco
-  const deadline = Date.now() + 5000;
-  for (;;) {
-    const line = monaco.editor.tokenize(probe, id)[0];
-    if (line?.some((t) => t.type !== '')) return;
-    if (Date.now() > deadline) {
-      console.warn(`[languages] ${id} tokenizer not ready after 5 s; continuing`);
-      return;
-    }
-    await new Promise((r) => setTimeout(r, 10));
-  }
-}
 
 class TmState implements monaco.languages.IState {
   constructor(readonly stack: StateStack) {}

@@ -35,7 +35,7 @@ const BUNDLED: { id: LanguageId; displayName: string }[] = [
 ];
 
 const defaultActivator: LanguageActivator = {
-  bundled: async (id) => (await import('./monaco-bridge')).activateBundled(id),
+  bundled: async (id) => (await import('./monaco-bundled')).activateBundled(id),
   textmate: async (def) => (await import('./monaco-bridge')).activateTextMate(def),
 };
 
