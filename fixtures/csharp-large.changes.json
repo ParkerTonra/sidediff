@@ -5,33 +5,33 @@
   "generator": "scripts/gen-fixtures.ts",
   "a": {
     "file": "csharp-large-a.cs",
-    "lines": 150235,
-    "bytes": 7601517,
-    "sha256": "f933348d431af18e69864d5fc2e4ff7838264db0eaa55c7f1153a075ae6dee89"
+    "lines": 150234,
+    "bytes": 7601455,
+    "sha256": "21d081d02005ba9ade5234496e631a9de48a916345524afd978f34a13ad41be4"
   },
   "b": {
     "file": "csharp-large-b.cs",
-    "lines": 150235,
-    "bytes": 7603401,
-    "sha256": "314b6722026fadfe84e4555b967b4f98f550daa536b140ab4539adeb84d1a8bc"
+    "lines": 150234,
+    "bytes": 7603072,
+    "sha256": "02ac471512309aa647be2ec0e53eaea084203a49325498c8b949bfbb7eec7498"
   },
   "edits": {
     "attrValue": 676,
     "csToken": 789,
-    "whitespace": 564,
+    "whitespace": 563,
     "attrReorder": 225,
     "blockInsert": {
       "lines": 300,
-      "beforeLineA": 95270
+      "beforeLineA": 95269
     },
     "blockDelete": {
       "lines": 300,
-      "fromLineA": 35441
+      "fromLineA": 35440
     },
     "move": {
       "lines": 8,
-      "fromLineA": 14595,
-      "toBeforeLineA": 140423
+      "fromLineA": 14594,
+      "toBeforeLineA": 140422
     }
   },
   "expected": {
@@ -44,8 +44,8 @@
     "noTrimWhitespace": {
       "added": 308,
       "removed": 308,
-      "modified": 2254,
-      "changes": 2258
+      "modified": 2253,
+      "changes": 2257
     }
   },
   "expectedSource": "monaco-editor@0.57.0 DefaultLinesDiffComputer (Node, maxComputationTimeMs 0)",
@@ -59,8 +59,8 @@
     "noTrimWhitespace": {
       "added": 308,
       "removed": 308,
-      "modified": 2254,
-      "changes": 2258
+      "modified": 2253,
+      "changes": 2257
     }
   },
   "tolerance": {

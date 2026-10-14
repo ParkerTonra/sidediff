@@ -5,62 +5,62 @@
   "generator": "scripts/gen-fixtures.ts",
   "a": {
     "file": "medium-a.xml",
-    "lines": 30007,
-    "bytes": 1749341,
-    "sha256": "c911983a658390f09432b24211687b18788e06b202aa85151798c69a1298e017"
+    "lines": 30081,
+    "bytes": 1828314,
+    "sha256": "099bbf42b0c56501af0e8e6b93a2f3384fd70e24cc274e5a469c348af35cc2eb"
   },
   "b": {
     "file": "medium-b.xml",
-    "lines": 30007,
-    "bytes": 1749225,
-    "sha256": "7d35cd56e8a177d1e470b02e11f69c0843283a69c5304d7c2be578a0beb72bf7"
+    "lines": 30081,
+    "bytes": 1828430,
+    "sha256": "f18847d037a3a43f65f64c6a986983b05b02e1398c4200f4f04588d4e75ea38f"
   },
   "edits": {
     "attrValue": 135,
     "csToken": 158,
     "whitespace": 113,
-    "attrReorder": 0,
+    "attrReorder": 45,
     "blockInsert": {
       "lines": 300,
-      "beforeLineA": 19201
+      "beforeLineA": 21831
     },
     "blockDelete": {
       "lines": 300,
-      "fromLineA": 10908
+      "fromLineA": 4928
     },
     "move": {
-      "lines": 11,
-      "fromLineA": 979,
-      "toBeforeLineA": 27343
+      "lines": 6,
+      "fromLineA": 5379,
+      "toBeforeLineA": 29925
     }
   },
   "expected": {
     "trimWhitespace": {
-      "added": 311,
-      "removed": 311,
-      "modified": 293,
-      "changes": 297
+      "added": 306,
+      "removed": 306,
+      "modified": 338,
+      "changes": 342
     },
     "noTrimWhitespace": {
-      "added": 311,
-      "removed": 311,
-      "modified": 406,
-      "changes": 410
+      "added": 306,
+      "removed": 306,
+      "modified": 451,
+      "changes": 455
     }
   },
   "expectedSource": "monaco-editor@0.57.0 DefaultLinesDiffComputer (Node, maxComputationTimeMs 0)",
   "constructed": {
     "trimWhitespace": {
-      "added": 311,
-      "removed": 311,
-      "modified": 293,
-      "changes": 297
+      "added": 306,
+      "removed": 306,
+      "modified": 338,
+      "changes": 342
     },
     "noTrimWhitespace": {
-      "added": 311,
-      "removed": 311,
-      "modified": 406,
-      "changes": 410
+      "added": 306,
+      "removed": 306,
+      "modified": 451,
+      "changes": 455
     }
   },
   "tolerance": {

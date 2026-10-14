@@ -34,6 +34,7 @@ const ATTR = 1; // has an attribute value (XML) or string literal (C#) to change
 const REORDER = 2; // has two or more attributes / named arguments to swap
 const TOKEN = 4; // C# line with an identifier or operator to change
 const WS = 8; // has enough content for a leading/trailing whitespace edit
+const CS = 16; // the line is C# source (in a .cs file or inside CDATA)
 
 type Range = [start: number, end: number]; // [start, end) line indices
 
@@ -81,6 +82,7 @@ function flagsFor(text: string, mode: 'xml' | 'cs' | 'none'): number {
     if (attrs >= 2 && trimmed.startsWith('<') && !trimmed.startsWith('</')) f |= REORDER;
     return f;
   }
+  f |= CS;
   if (trimmed.startsWith('//')) return f;
   if (countMatches(CS_LITERAL_RE, text) >= 1) f |= ATTR;
   if (trimmed.startsWith('[') && countMatches(CS_NAMED_ARG_RE, text) >= 2) f |= REORDER;
@@ -321,14 +323,14 @@ function emitCdata(b: Builder, n: Names, cdataName: string, target: number): voi
 function emitGraph(b: Builder, n: Names): void {
   const graph = n.rng.pick(GRAPHS);
   push(b, `<Graph ClassName="${graph}" Source="#CDATA" IsNew="${n.rng.chance(0.3) ? 'True' : 'False'}" FileType="ExistingGraph">`, 'xml');
-  emitCdata(b, n, 'Source', n.rng.int(50, 400));
+  emitCdata(b, n, 'Source', n.rng.int(55, 380)); // members overshoot by <= 20 lines
   push(b, '</Graph>', 'xml');
 }
 
 function emitFile(b: Builder, n: Names): void {
   const name = ident(n, 1);
   push(b, `<File AppRelativePath="App_Code\\Caches\\${name}.cs" FileType="CSharp" Description="${display(name)} extension">`, 'xml');
-  emitCdata(b, n, 'Content', n.rng.int(50, 400));
+  emitCdata(b, n, 'Content', n.rng.int(55, 380)); // members overshoot by <= 20 lines
   push(b, '</File>', 'xml');
 }
 
@@ -390,7 +392,6 @@ function buildXml(n: Names, target: number): Builder {
 
 function buildCs(n: Names, target: number): Builder {
   const b = newBuilder();
-  push(b, '// SideDiff fixture: generated Acumatica customization source', 'cs');
   for (const u of USINGS) push(b, u, 'cs');
   push(b, '', 'cs');
   while (b.lines.length < target) emitCSharpUnit(b, n, n.rng.int(150, 900), false, true);
@@ -475,7 +476,8 @@ function editLine(kind: EditKind, line: string, isXml: boolean, rng: Rng): strin
 const KIND_FLAG: Record<EditKind, number> = { attrValue: ATTR, csToken: TOKEN, whitespace: WS, attrReorder: REORDER };
 /** Share of the single-line edits that goes to each kind. */
 const KIND_SHARE: Record<EditKind, number> = { attrValue: 0.3, csToken: 0.35, whitespace: 0.25, attrReorder: 0.1 };
-const EDIT_KINDS: readonly EditKind[] = ['attrValue', 'csToken', 'whitespace', 'attrReorder'];
+// Rarest candidates first, so dense XML attribute lines are not used up by commoner kinds.
+const EDIT_KINDS: readonly EditKind[] = ['attrReorder', 'attrValue', 'csToken', 'whitespace'];
 
 /** Unchanged lines kept between any two edits so hunks never merge. */
 export const EDIT_GAP = 12;
@@ -580,7 +582,7 @@ export function generatePair(spec: FixtureSpec): GeneratedPair {
       if (counts[kind] >= want) break;
       if (!free(i, i + 1)) continue;
       const before = doc.lines[i] ?? '';
-      const after = editLine(kind, before, isXml, rng);
+      const after = editLine(kind, before, !((doc.flags[i] ?? 0) & CS), rng);
       if (after === null || after === before) continue;
       const wsOnly = after.trim() === before.trim();
       if (wsOnly !== (kind === 'whitespace')) continue;
