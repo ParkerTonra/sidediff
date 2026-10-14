@@ -11,6 +11,7 @@ Source: `docs/INTERFACES.md` (UI contract). The UI registers its shortcuts on `d
 | `Ctrl+H` | Find and replace | Monaco built-in, in editable panes. |
 | `Ctrl+Z` / `Ctrl+Y` | Undo / redo | Monaco built-in, per pane. |
 | `Ctrl+A` | Select all in the focused pane | Monaco built-in. |
+| `Ctrl+M` | Toggle Tab focus mode | Tab then moves focus out of the editor instead of inserting a tab. Needed for keyboard-only use (Mac: `Ctrl+Shift+M`). |
 | `?` | Show this cheat sheet | Only when focus is not in an editor or input. |
 | `Esc` | Close the open dialog | Cheat sheet, Add language. |
 
