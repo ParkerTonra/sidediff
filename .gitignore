@@ -11,3 +11,8 @@ fixtures/*.txt
 .claude/next-prompt.md*
 .claude/settings.local.json
 .claude/hooks/
+
+# real customer exports never go in this public repo
+/project.xml
+/local/
+*.real.xml
