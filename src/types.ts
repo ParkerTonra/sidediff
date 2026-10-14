@@ -30,7 +30,11 @@ export interface AppSettings {
   language: LanguageId;
   theme: ThemeId;
   diff: DiffOptions;
+  /** Optional so older stored settings stay valid; defaults in DEFAULT_EXPLORER. */
+  explorer?: ExplorerSettings;
 }
+
+export const DEFAULT_EXPLORER: ExplorerSettings = { open: true, width: 300, filter: 'changed' };
 
 export const DEFAULT_SETTINGS: AppSettings = {
   version: 1,
@@ -91,6 +95,149 @@ export interface DiffEngineEvents {
   content: { side: Side; lines: number; bytes: number };
   /** A paste landed in a pane. `sample` is the first <= 8 KB, for detection. */
   paste: { side: Side; sample: string };
+  /** The engine switched between the full texts (null) and an item view (its key). */
+  view: { key: string | null };
+  /** A whole-text replacement was undone or redone (see TextHistoryApi). */
+  history: { side: Side | 'both'; action: 'undo' | 'redo'; reason: ReplaceReason };
+}
+
+// --- Whole-text undo (Editor) ------------------------------------------------
+
+/** Why a side's text was replaced wholesale; shown in "Undid <reason>" toasts. */
+export type ReplaceReason = 'set' | 'paste' | 'load' | 'clear' | 'swap';
+
+/**
+ * Undo/redo for whole-text replacements (setText, paste-replace-all, file
+ * load, clear, swap), which build a fresh Monaco model and so are not on
+ * Monaco's own undo stack. Ctrl+Z/Ctrl+Y inside an editor use Monaco's stack
+ * first and fall through to this one when it is empty.
+ */
+export interface TextHistoryApi {
+  /** setText with a reason recorded in the history. */
+  replaceText(side: Side, text: string, reason: ReplaceReason): void;
+  /** Undo the latest replacement on `side` (or the latest of either side). False if none. */
+  undoReplace(side?: Side): boolean;
+  redoReplace(side?: Side): boolean;
+  canUndoReplace(side?: Side): boolean;
+  canRedoReplace(side?: Side): boolean;
+}
+
+// --- Item views (Editor) -------------------------------------------------------
+
+/** A pair of texts the engine shows instead of the full A/B texts. */
+export interface ItemView {
+  /** Stable key, e.g. `${ProjectItem.id}#code`. */
+  key: string;
+  /** null = the item does not exist on that side (pane shows empty). */
+  a: string | null;
+  b: string | null;
+  language: LanguageId;
+}
+
+export interface ItemViewApi {
+  /**
+   * Show `view` in the diff editor. The full-text models stay alive and
+   * unchanged; getText() keeps returning the full texts. Item views are
+   * read-only. Diff options, theme, navigation, stats and events all apply to
+   * whatever is shown. Calling again with another view replaces it.
+   */
+  openView(view: ItemView): void;
+  /** Back to the full texts, restoring their scroll position. */
+  closeView(): void;
+  /** Key of the open view, or null when the full texts are shown. */
+  getView(): string | null;
+  /** Show the full texts and put `line` (1-based) of `side` in the centre. */
+  revealLine(side: Side, line: number): void;
+}
+
+// --- Acumatica project index (src/project/) ------------------------------------
+
+export type ProjectGroup =
+  | 'code'
+  | 'screens'
+  | 'tables'
+  | 'sql'
+  | 'reports'
+  | 'inquiries'
+  | 'sitemap'
+  | 'integration'
+  | 'files'
+  | 'other';
+
+/**
+ * same: identical bytes. whitespace: differs only in leading/trailing
+ * whitespace per line. modified: differs otherwise. only-a / only-b: present
+ * on one side.
+ */
+export type ItemStatus = 'same' | 'whitespace' | 'modified' | 'only-a' | 'only-b';
+
+/** One way to look at an item: its code (CDATA body) or its raw XML element. */
+export interface ItemViewKind {
+  id: 'code' | 'xml';
+  label: string;
+  language: LanguageId;
+}
+
+export interface ProjectItemSide {
+  /** 1-based inclusive line range of the element in the full text. */
+  startLine: number;
+  endLine: number;
+}
+
+export interface ProjectItem {
+  /** Stable match key across sides: `${element}:${identity}`, `#2`... for duplicates. */
+  id: string;
+  group: ProjectGroup;
+  /** XML element name, e.g. "Graph". */
+  element: string;
+  /** Display name, e.g. "SOOrderEntry_Extension" or "SO301000". */
+  name: string;
+  /** Secondary text, e.g. "Graph extension" or the file path. */
+  detail: string;
+  /** Status of the default (first) view. */
+  status: ItemStatus;
+  /** First entry is the default view. Always includes 'xml'. */
+  views: ItemViewKind[];
+  a: ProjectItemSide | null;
+  b: ProjectItemSide | null;
+}
+
+export interface ProjectSideInfo {
+  /** Root element is <Customization>. */
+  isProject: boolean;
+  /** Root attributes, e.g. product-version, description. */
+  attributes: Record<string, string>;
+  items: number;
+  parseMs: number;
+  /** Set when the text looked like a project but could not be scanned. */
+  error?: string;
+}
+
+export interface ProjectIndex {
+  sides: Record<Side, ProjectSideInfo>;
+  /** Grouped and sorted: by group order above, then name. */
+  items: ProjectItem[];
+  counts: Record<ItemStatus, number>;
+}
+
+export interface ProjectIndexer {
+  /**
+   * Scan both texts off the main thread and match items. A newer call
+   * supersedes an older one (the older promise rejects with an AbortError).
+   * Resolves with isProject false on both sides for non-project text.
+   */
+  index(a: string, b: string): Promise<ProjectIndex>;
+  /** Text of one view of one item on one side, from the texts last indexed; null if absent. */
+  viewText(itemId: string, view: ItemViewKind['id'], side: Side): string | null;
+  dispose(): void;
+}
+
+export type ItemFilter = 'all' | 'changed' | 'only-a' | 'only-b';
+
+export interface ExplorerSettings {
+  open: boolean;
+  width: number;
+  filter: ItemFilter;
 }
 
 export type Unsubscribe = () => void;
@@ -160,12 +307,17 @@ export interface AppDeps {
   root: HTMLElement;
   engine: DiffEngine;
   registry: LanguageRegistry;
+  /** Optional while the explorer lands; the UI hides features whose dep is missing. */
+  project?: ProjectIndexer;
+  views?: ItemViewApi;
+  history?: TextHistoryApi;
 }
 
 /** Exposed as window.__sidediff for e2e tests and the bench. */
 export interface SideDiffHooks {
   engine: DiffEngine;
   registry: LanguageRegistry;
+  project?: ProjectIndexer;
 }
 
 declare global {

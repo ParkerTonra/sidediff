@@ -150,6 +150,75 @@ Required `data-testid` values:
 | ? | shortcut cheat sheet (only when focus is not in an editor or input) |
 | Esc | close dialogs |
 
+## Project explorer and whole-text undo (feature 2, Phase 4)
+
+Goal (user): load two Acumatica `project.xml` exports, see every item in them (code files, screen mods, tables, SQL, reports, site map, inquiries, …), spot what one side is missing, and open any item as its own focused diff. Everything that can't be categorized still appears, under **Other**. Ctrl+Z must undo pastes, clears, loads and swaps. Types: `src/types.ts` (`ProjectIndexer`, `ProjectIndex`, `ProjectItem`, `ItemViewApi`, `TextHistoryApi`, `ExplorerSettings`).
+
+### Ownership
+
+| Piece | Owner | Where |
+|---|---|---|
+| Scanner, classifier, matcher, worker, `createProjectIndexer(): ProjectIndexer` | Languages | new `src/project/` (`src/project/index.ts`) |
+| `ItemViewApi` + `TextHistoryApi` on the engine (`createDiffEngine()` returns `DiffEngine & ItemViewApi & TextHistoryApi`), Ctrl+Z/Ctrl+Y fall-through | Editor | `src/editor/` |
+| Explorer drawer, quick-open, breadcrumb, toasts, shortcuts, settings | UI | `src/app/`, `src/styles/`, `src/persist/` |
+| `project` fixture pair, unit/e2e tests, bench lines | QA | `scripts/`, `fixtures/`, `tests/` |
+| Wiring in `main.ts`, these contracts, README | Lead | |
+
+The new `AppDeps` fields (`project`, `views`, `history`) are optional until all three land; the Lead then wires them in `main.ts` and folds `ItemViewApi`/`TextHistoryApi` into `DiffEngine`.
+
+### Scanner and classifier (`src/project/`)
+
+- Runs in a Web Worker (no `DOMParser` there): a hand-written linear scanner over the text, not a full XML parser. When the root element is `<Customization …>` the side is a project and each **direct child element** of the root is one item. It records the element name, its start-tag attributes, its 1-based line range, and every `<CDATA name="…"><![CDATA[…]]></CDATA>` inside it (body offsets; adjacent sections split around `]]>`, i.e. `]]]]><![CDATA[>`, are joined back). Comments, processing instructions and text between items are skipped. Unexpected structure never throws: the side gets `error` plus the items found so far.
+- Targets: scanning one 150k-line side takes < 500 ms in the worker; main-thread work per `index()` call < 50 ms. A newer call aborts an older one (terminate + respawn, like D11).
+- Classification is a **data table** (one entry per element name, easy to extend). Identity = the first attribute present from the element's key list, else the first of `Name, name, ScreenID, ClassName, TableName, ReportName, path, AppRelativePath, Title, Key` found on the element or its first descendants (scan at most 64 KB), else the ordinal among siblings of that element name. Unknown elements go to `other` with `name` = identity and `detail` = element name. Duplicate ids get `#2`, `#3` in document order.
+
+| Element | Group | Key attribute(s) | Name / detail | Default view |
+|---|---|---|---|---|
+| `Graph` | code | `ClassName` | ClassName; detail from `FileType`: ExistingGraph → "Graph extension", NewGraph → "New graph", ExistingDac → "DAC extension", NewDac → "New DAC", else FileType | code (CDATA `Source`, csharp) |
+| `File` | code if path ends `.cs`, else files | `AppRelativePath` | file name; detail = path | code (CDATA `Content`; csharp for .cs, xml for .aspx/.xml/.config, else plaintext) |
+| `Page` | screens | `path` | screen id from the file name, upper-cased (`~/pages/so/so301000.aspx` → SO301000); detail = `ScreenTitle` or path | xml (plus a code view if it has CDATA, e.g. `pageSource`) |
+| `Table` | tables | `TableName` | TableName; detail = "N columns" | xml |
+| `Sql` | sql | `TableName`, `Name` | | code (its CDATA, plaintext) |
+| `Report`, `ReportDefinition` | reports | `ReportName`, `Name` | | code (CDATA, xml) |
+| `SiteMapNode` | sitemap | descendant `ScreenID`, `Title` | | xml |
+| `GenericInquiryScreen`, `GIDesign`, `DashboardMaintenance` | inquiries | descendant `Name`, `DesignID` | | xml |
+| `EntityEndpoint`, `XportScenario`, `ImportScenario`, `WebHook`, `BusinessEvent` | integration | `Name` (+ `Version` for endpoints) | | xml |
+| anything else | other | generic list above | `<Element> identity` | xml |
+
+- `views`: `code` comes first when the element has CDATA (one section → its body; several → bodies joined with a `// ---- <name> ----` separator line), then `xml` (the element's own lines, verbatim). No CDATA → `xml` only.
+- Status compares the default view's text: identical → `same`; equal after trimming each line → `whitespace`; else `modified`. Moving an element doesn't make it differ (matching is by id, not position).
+- `viewText(id, view, side)` slices the texts from the last `index()` (the indexer keeps references; no copy until asked).
+
+### Engine additions (`src/editor/`)
+
+- `openView` builds two read-only models (a null side = empty model) and shows them in the diff editor. The full-text models stay alive, and `closeView` restores their view state. `setText`/`replaceText`/`swap` while a view is open update the full models and leave the view open (the UI re-indexes, then re-opens or closes it). Emits `view`.
+- `TextHistoryApi`: every whole-text replacement pushes the replaced model onto that side's history instead of disposing it (swap pushes one entry covering both sides). Bounded to 10 entries and 300 MB of text across both sides, oldest dropped first. A Monaco command on Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z in each editor uses Monaco's own undo/redo when the model has entries, else `undoReplace(side)` / `redoReplace(side)`. Typing after an undo clears that side's redo. Emits `history`. The paste fast path records reason `paste`; Clear, Open, drop and Swap go through `replaceText`/`swap` with their reasons (the UI switches its calls from `setText`).
+
+### UI (`src/app/`)
+
+Principle: nothing new on screen until a project is loaded; then one drawer and one breadcrumb, and everything else is keyboard-first.
+
+- **Explorer drawer** to the left of the panes (`data-testid="explorer"`), shown when either side `isProject`. Toolbar toggle `btn-explorer` with a one-line summary ("412 items · 37 changed"), and Ctrl+B. Resizable (drag its edge, 200–600 px); width, open state and filter persist in `AppSettings.explorer`.
+  - Header: both projects' `product-version` (and `description` on hover) when they differ, so a version mismatch is visible at once.
+  - Filter input `explorer-filter` (fuzzy on name + detail) and chips `filter-all`, `filter-changed` (default: modified + whitespace + only-a + only-b), `filter-only-a`, `filter-only-b`, each with its count.
+  - Groups (`explorer-group-<group>`) in table order, collapsible; the header shows name, count and small per-status counts. Empty groups are hidden; **Other** is always last when non-empty.
+  - Rows (`explorer-item`, `data-id`, `data-status`): a status glyph with colour **and** shape (`~` modified, `≈` whitespace only, `−` only in A, `+` only in B, `=` same, dimmed), the name, and a dim detail; title attribute = full key/path. The open item is highlighted. Arrow keys move, Enter opens, Home/End jump.
+- **Item view**: clicking a row calls `openView`. A breadcrumb bar (`item-bar`) appears above the panes: `← Project` (`btn-back`; also Alt+Left, and Esc when no dialog is open) · group · item name · `Code | XML` switch (`item-view-switch`, only when both exist) · `Show in project` (`btn-show-in-project`, `revealLine` on a side that has it) · `‹ ›` previous/next item in the current filter (`btn-prev-item`, `btn-next-item`, Alt+PageUp / Alt+PageDown). A missing side shows a centred hint in its pane (`missing-hint-a|b`: "Not in <label>"). Language follows the view kind; stats and change navigation describe the item. Pane headers say "read-only item view".
+- **Quick open** Ctrl+P (`quick-open` dialog): fuzzy search over all items regardless of filter, with status glyphs; Enter opens. Works with the drawer closed.
+- **Undo toasts**: on `history`, a toast "Undid clear of <label> · Ctrl+Y to redo". Ctrl+Z with focus outside the editors (e.g. right after clicking Clear) calls `undoReplace()`.
+- Re-index after content changes, debounced 400 ms; a small spinner in `btn-explorer` while indexing. If the open item vanished, close the view with a toast.
+- Cheat sheet and SHORTCUTS.md gain: Ctrl+B, Ctrl+P, Alt+Left / Esc (back), Alt+PageUp/PageDown (prev/next item), Ctrl+Z / Ctrl+Y.
+
+### Acceptance (Lead verifies in the browser)
+
+1. Loading the `project` fixture pair shows the drawer with every group, correct counts and statuses per the sidecar, and an **Other** group with the unknown elements.
+2. An item only in A shows `−`; opening it shows A's code and an empty B with "Not in B".
+3. Opening a modified Graph shows a C#-highlighted code diff with intra-line changes; diff only, navigation and whitespace options work in the item view; `‹ ›` and Back work; Back restores the project scroll position.
+4. Ctrl+P finds an item by partial name and opens it.
+5. Clear B, then Ctrl+Z restores B byte-identical; Ctrl+Y clears again. Paste-replace and file load undo likewise; Swap undoes in one step. Typed edits still undo with Monaco's stack.
+6. Large pair: indexing never blocks the main thread > 50 ms and finishes < 1.5 s after load; existing bench lines still pass.
+7. Non-project text (C# pair, plain text): no drawer, no breadcrumb, nothing else changes.
+
 ## Ports
 
 `pnpm dev` serves on **5317** (5173 is taken on this machine). Playwright uses 5317 with `reuseExistingServer`. For ad-hoc runs of your own, use `./node_modules/.bin/vite --port <5318–5329>`.
