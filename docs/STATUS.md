@@ -5,7 +5,7 @@ Each agent keeps its own section current: **Doing**, **Done** (with what was mea
 ## Lead / Integrator
 - Done: Phase 0. Scaffold (Vite 8, TS 6.0 strict, ESLint 10, Vitest 5, Playwright 1.64), Monaco 0.57 DiffEditor rendered in vs-dark with its worker loaded (verified in a browser, no console errors), interfaces in `src/types.ts` + `docs/INTERFACES.md`, factory stubs in each module.
 - Done: Phase 1 closed 2026-10-14. All agents landed; `pnpm check` green (103 tests); QA `pnpm bench` all PASS; e2e 25/25 per Editor (not yet re-run by the Lead). Applied CSP `'wasm-unsafe-eval'` (f2d699a); INTERFACES.md: method semantics, `goToChange` is 1-based.
-- Next: Phase 2 (see HANDOFF.md).
+- Phase 2 (2026-10-14): Lead re-ran against the dev server on 5317: `pnpm e2e` **25/25** (50.9 s); `pnpm bench` **all PASS** (`bench-results/bench-2026-10-14T18-11-11-085Z.json`): load A/B 122/136 ms, diff ready 833 ms, longest task during diff 52 ms, stats exact 308/308/1689/1693, diff only on/off 350/94 ms, worst scroll frame 17 ms, JS heap 47.4 MB, stress done 3.1 s degraded, initial JS 0.7 MB gzip. Reviewer pass 2 requested.
 
 ## Editor and Diff Core (`src/editor/`)
 - **Done**: `createDiffEngine()` per INTERFACES.md: all 7 events, all `sidediff:*` marks, options, navigation (wraps, works with diff only), stats with the counting rule, degraded mode, paste fast path, theme, find, layout, dispose. Decisions D6 to D9 in DECISIONS.md (diff provider override, ignore-all-ws shadow models, 10 s / 30 s diff budget, features/patches). `goToChange(i)` is **1-based** like `ChangePosition.index` (Lead: please add to INTERFACES.md). `getPosition()` is `{0, 0}` before the first diff.
