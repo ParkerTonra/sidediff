@@ -40,3 +40,6 @@ With `maxComputationTimeMs: 0`, two unrelated 150k-line files (every line differ
 - A single click on "N hidden lines" expands the region (Monaco needs a double click).
 - `src/editor/monaco-patches.ts` coalesces `ViewOverlayWidgets._updateMaxMinWidth` to once per microtask. It rescans all overlay widgets on every add, which is O(N²) in the number of collapsed regions: loading the large pair with diff only on had a 358 ms task, now 131 + 180 ms; the diff-only toggle went from 519 to about 300 ms.
 - `content.bytes` counts UTF-16 code units (`model.getValueLength()`): equal to UTF-8 bytes for ASCII, O(1) per keystroke. The 40 MB degraded threshold uses the same count.
+
+## D10. P2 single-file build not shipped (Lead)
+Section 3 lists a single-file `index.html` as a P2 stretch. It is not built. Inlining needs Monaco's editor worker as a `data:`/blob URL, the onig.wasm as a decoded `data:` URL, and a rewritten CSP (hashes instead of `script-src 'self'`). That is new surface that could break the P0 gates, which all pass on the normal `dist/` (served from any static host). The Languages registry already has the `data:` WASM path written but untested; that is where a later attempt would start. The Add-language dialog, the other P2 item, is shipped and verified through `/`.
