@@ -99,7 +99,7 @@ Install pipeline: fetch (no credentials, no redirects, 30 s timeout) -> under 2 
 
 SideDiff uses Monaco Editor's `DiffEditor` (`monaco-editor` 0.57, pinned). It computes the diff in a web worker, has a built-in `hideUnchangedRegions` (the "diff only" feature), intra-line highlighting, side-by-side and inline modes, change navigation and `vs`/`vs-dark` themes, and ships Monarch tokenizers for C# and XML. Only the editor API plus the C# and XML registrations are imported (never the `monaco-editor` barrel), which keeps the bundle to those two language chunks.
 
-The fallback, if Monaco had missed the performance gate, was CodeMirror 6 with `@codemirror/merge`. Outcome: Monaco passes every gate with a wide margin, so the fallback was not needed. The engine owns Monaco's diff provider (D6), implements "ignore all whitespace" with hidden whitespace-stripped shadow models so the visible text never changes (D7), and uses a 10 s diff budget (30 s when degraded), after which Monaco returns an approximate result and the stats bar says so (D8).
+The fallback, if Monaco had missed the performance gate, was CodeMirror 6 with `@codemirror/merge`. Outcome: Monaco passes every gate with a wide margin, so the fallback was not needed. The engine owns Monaco's diff provider (D6), implements "ignore all whitespace" with hidden whitespace-stripped shadow models so the visible text never changes (D7), and uses a 10 s diff budget (30 s when degraded), after which Monaco returns an approximate result and the stats bar says so (D8). Diffs run Monaco's own diff algorithm in a dedicated worker that the engine restarts whenever newer text or options arrive, so a stale run never delays the current one (D11).
 
 ## Performance gate
 
@@ -107,14 +107,14 @@ Measured by `pnpm bench` in headless Chromium on the 150k-line `large` pair (8.7
 
 | Check | Limit | Measured |
 |---|---|---|
-| One 150k-line side to first render | < 2 s | 123 ms (A), 135 ms (B) |
-| Diff ready, both sides | target < 5 s, hard < 10 s | 0.84 s |
-| Longest main-thread block during diff | <= 200 ms | 0 ms (92 ms worst, during load) |
-| Toggle "diff only" on / off | < 1 s | 310 / 87 ms |
+| One 150k-line side to first render | < 2 s | 123 ms (A), 139 ms (B) |
+| Diff ready, both sides | target < 5 s, hard < 10 s | 0.80 s |
+| Longest main-thread block during diff | <= 200 ms | 52 ms |
+| Toggle "diff only" on / off | < 1 s | 315 / 90 ms |
 | Worst frame in a 5 s scripted scroll | <= 100 ms | 17 ms |
-| Tab memory after diff | < 2 GB | 442 MB renderer, 48 MB JS heap |
+| Tab memory after diff | < 2 GB | 408 MB renderer, 48 MB JS heap |
 | `stress` pair (500k lines) | no crash, warning shown, finishes or reports within 60 s | done in 2.9 s, degraded warning shown |
-| Initial JS, gzipped | < 3 MB (warning only) | 0.78 MB; lazy chunks: csharp, xml only |
+| Initial JS, gzipped | < 3 MB (warning only) | 0.79 MB; lazy chunks: csharp, xml only |
 
 Two unrelated 150k-line files (every line differs) hit the diff budget and return an approximate result after about 10 s.
 
