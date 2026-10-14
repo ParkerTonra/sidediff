@@ -247,7 +247,7 @@ async function startApp({ root, engine, registry }: AppDeps): Promise<void> {
     degradedBanner.hidden = info === null;
     if (!info) return;
     const which = info.sides.map((s) => `${settings.labels[s]} (${fmt(info.lines[s])} lines, ${formatBytes(info.bytes[s])})`).join(' and ');
-    degradedBanner.textContent = `Large input: ${which}. ${info.reason} Character-level highlighting is off to keep the tab responsive.`;
+    degradedBanner.textContent = `Degraded mode for large input: ${which}. ${info.reason}`;
   }
 
   function setComputing(computing: boolean, text = ''): void {
