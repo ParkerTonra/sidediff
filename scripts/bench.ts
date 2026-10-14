@@ -443,6 +443,8 @@ async function largeScenario(browser: Browser, browserPid: number | undefined): 
     });
   }
 
+  await projectIndexLines(page, from);
+
   // Diff only on / off.
   for (const on of [true, false]) {
     const r = await toggleDiffOnly(page, on);
@@ -479,6 +481,77 @@ async function largeScenario(browser: Browser, browserPid: number | undefined): 
   add({ metric: 'Console errors (large run)', value: errors.length ? errors.slice(0, 3).join(' | ') : 'none', target: 'none', status: errors.length ? 'FAIL' : 'PASS' });
   if (crashed()) add({ metric: 'Renderer crash (large)', value: 'crashed', target: 'no crash', status: 'FAIL' });
   await page.context().close();
+}
+
+/**
+ * Phase 4 gate (INTERFACES.md "Project explorer", acceptance 6): on the large
+ * pair, the explorer is ready < 1.5 s after load, and indexing never blocks
+ * the main thread > 50 ms. `from` is B's load start (page time).
+ */
+async function projectIndexLines(page: Page, from: number): Promise<void> {
+  const wired = await page.evaluate(() => !!window.__sidediff?.project);
+  if (!wired) {
+    add({ metric: 'Project explorer ready after load', value: 'window.__sidediff.project missing', target: '< 1500 ms', status: 'ERROR' });
+    add({ metric: 'Longest task while indexing', value: 'n/a', target: '< 50 ms', status: 'ERROR' });
+    return;
+  }
+  // 1. Through the UI: B load start → the explorer button shows its "N items" summary.
+  let ready: number | null;
+  try {
+    const h = await page.waitForFunction(
+      () => {
+        const btn = document.querySelector('[data-testid="btn-explorer"]');
+        const ex = document.querySelector('[data-testid="explorer"]');
+        const shown = ex instanceof HTMLElement && ex.offsetParent !== null;
+        return shown && /\d[\d,]*\s+items/.test(btn?.textContent ?? '') ? performance.now() : false;
+      },
+      undefined,
+      { timeout: 15_000, polling: 10 },
+    );
+    ready = (await h.jsonValue()) as number;
+  } catch {
+    ready = null;
+  }
+  const bench = (await page.evaluate(() => window.__bench)) as BenchState;
+  if (ready === null) {
+    add({ metric: 'Project explorer ready after load', value: 'explorer not shown with an item count in 15 s', target: '< 1500 ms', status: 'ERROR' });
+  } else {
+    const uiWorst = longestTask(bench.longtasks, from, ready);
+    add({
+      metric: 'Project explorer ready after load',
+      value: ms(ready - from),
+      target: '< 1500 ms',
+      status: gate(ready - from, 1500),
+      note: `B load start → drawer with item count, incl. 400 ms debounce; longest task in that window ${ms(uiWorst)} (load + diff + drawer)`,
+    });
+  }
+
+  // 2. Direct: index() on the loaded texts, longest main-thread task while it runs.
+  try {
+    const r = await page.evaluate(async () => {
+      const s = window.__sidediff;
+      if (!s?.project) throw new Error('no indexer');
+      const a = s.engine.getText('a');
+      const b = s.engine.getText('b');
+      await new Promise((res) => setTimeout(res, 100));
+      const t0 = performance.now();
+      const ix = await s.project.index(a, b);
+      const t1 = performance.now();
+      await new Promise((res) => setTimeout(res, 50)); // let the longtask observer flush
+      return { t0, t1, items: ix.items.length, project: ix.sides.a.isProject && ix.sides.b.isProject, parse: [ix.sides.a.parseMs, ix.sides.b.parseMs] };
+    });
+    const after = (await page.evaluate(() => window.__bench)) as BenchState;
+    const worst = longestTask(after.longtasks, r.t0, r.t1);
+    add({
+      metric: 'Longest task while indexing',
+      value: ms(worst),
+      target: '< 50 ms',
+      status: r.project ? gate(worst, 50) : 'FAIL',
+      note: `index() ${ms(r.t1 - r.t0)} for ${r.items} items; worker scan A/B ${r.parse.map((x) => ms(x)).join(' / ')}${r.project ? '' : '; NOT detected as a project'}`,
+    });
+  } catch (e) {
+    add({ metric: 'Longest task while indexing', value: errText(e), target: '< 50 ms', status: 'ERROR' });
+  }
 }
 
 async function stressScenario(browser: Browser): Promise<void> {
