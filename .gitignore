@@ -8,3 +8,4 @@ fixtures/*.xml
 fixtures/*.cs
 fixtures/*.txt
 *.log
+.claude/next-prompt.md*
