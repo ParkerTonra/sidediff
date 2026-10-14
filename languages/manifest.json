@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "packs": [
+    {
+      "id": "sql",
+      "displayName": "SQL",
+      "format": "tmlanguage-json",
+      "license": "MIT",
+      "url": "https://cdn.jsdelivr.net/gh/microsoft/vscode@1.140.0/extensions/sql/syntaxes/sql.tmLanguage.json",
+      "sha256": "284a00c971983e532aa0abd40cc0fa2e4c62f783014f022747a7800e8244f963"
+    },
+    {
+      "id": "json",
+      "displayName": "JSON",
+      "format": "tmlanguage-json",
+      "license": "MIT",
+      "url": "https://cdn.jsdelivr.net/gh/microsoft/vscode@1.140.0/extensions/json/syntaxes/JSON.tmLanguage.json",
+      "sha256": "d7238f1cc9033993b9816b0945cab4bb8ea108de0399663c551f28f913e94c70"
+    }
+  ]
+}
