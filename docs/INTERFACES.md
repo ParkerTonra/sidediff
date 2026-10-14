@@ -30,6 +30,11 @@ One Monaco `DiffEditor` mounted into one container. A = original (left), B = mod
 - `nextChange()` / `prevChange()` / `goToChange(i)`: move both the viewport and the cursor, wrap around, and emit `position`. Works with diff-only on (it reveals the target region).
 - `getStats()`: stats from the last completed diff, or `null`.
 - `find(side?)`: opens Monaco's find widget.
+- `getPosition()`: current `ChangePosition` (same value as the last `position` event).
+- `isComputing()`: true between `diff:start` and `diff:done`/`diff:error`.
+- `focus(side)`: focuses that side's editor (in inline mode, both map to the single editor).
+- `layout()`: re-measures the container; `automaticLayout` may make it a no-op.
+- `dispose()`: disposes the editor, models and listeners. The engine can't be reused afterwards.
 - `on(event, handler)`: returns an unsubscribe function.
 
 ### Events
