@@ -29,6 +29,7 @@ const SIDES: readonly Side[] = ['a', 'b'];
 const DETECT_SAMPLE = 8 * 1024;
 const REINDEX_DELAY_MS = 400;
 const QUICK_OPEN_LIMIT = 60;
+const ITEM_LOADING_DELAY_MS = 150;
 const SHORTCUTS: ReadonlyArray<[string, string]> = [
   ['F7 / Alt+↓', 'Next change'],
   ['Shift+F7 / Alt+↑', 'Previous change'],
@@ -172,7 +173,10 @@ async function startApp({ root, engine, registry, project, views, history }: App
     a: h('div', { class: 'empty-hint hint-a missing-hint', 'data-testid': 'missing-hint-a', hidden: true }),
     b: h('div', { class: 'empty-hint hint-b missing-hint', 'data-testid': 'missing-hint-b', hidden: true }),
   };
-  const editorWrap = h('div', { class: 'editor-wrap' }, editorEl, panes.a.hint, panes.b.hint, missing.a, missing.b, panes.a.drop, panes.b.drop);
+  const itemLoadingText = h('span', {});
+  const itemLoading = h('div', { class: 'item-loading', 'data-testid': 'item-loading', role: 'status', hidden: true },
+    h('span', { class: 'spinner', 'aria-hidden': 'true' }), itemLoadingText);
+  const editorWrap = h('div', { class: 'editor-wrap' }, editorEl, panes.a.hint, panes.b.hint, missing.a, missing.b, panes.a.drop, panes.b.drop, itemLoading);
   addDropTarget(editorWrap, (e) => {
     if (settings.diff.viewMode === 'inline') return 'b';
     const rect = editorWrap.getBoundingClientRect();
@@ -523,17 +527,31 @@ async function startApp({ root, engine, registry, project, views, history }: App
   }
 
   let openSeq = 0;
+  let loadingTimer: ReturnType<typeof setTimeout> | undefined;
   async function openItem(item: ProjectItem, viewId?: ItemViewKind['id']): Promise<void> {
     if (!views || !project || !ready) return;
     const kind = item.views.find((v) => v.id === viewId) ?? item.views[0];
     if (!kind) return;
     const seq = ++openSeq;
+    // viewText may decode (Page sources are base64 raw-deflate): show a small loading state only if it is slow.
+    clearTimeout(loadingTimer);
+    loadingTimer = setTimeout(() => {
+      if (seq !== openSeq) return;
+      itemLoadingText.textContent = `Opening ${item.name}…`;
+      itemLoading.hidden = false;
+    }, ITEM_LOADING_DELAY_MS);
+    const done = (): void => {
+      if (seq !== openSeq) return;
+      clearTimeout(loadingTimer);
+      itemLoading.hidden = true;
+    };
     let language = kind.language;
     let a: string | null;
     let b: string | null;
     try {
       [a, b] = await Promise.all([project.viewText(item.id, kind.id, 'a'), project.viewText(item.id, kind.id, 'b')]);
     } catch (err) {
+      done();
       if (seq === openSeq) showToast(`Could not open ${item.name}: ${errorText(err)}`);
       return;
     }
@@ -542,6 +560,7 @@ async function startApp({ root, engine, registry, project, views, history }: App
     } catch {
       language = 'plaintext';
     }
+    done();
     if (seq !== openSeq) return; // a newer open (or Back) won
     current = { item, view: kind };
     views.openView({ key: `${item.id}#${kind.id}`, a, b, language });
@@ -628,6 +647,8 @@ async function startApp({ root, engine, registry, project, views, history }: App
   function back(): void {
     if (!current || !views) return;
     openSeq++;
+    clearTimeout(loadingTimer);
+    itemLoading.hidden = true;
     const id = current.item.id;
     views.closeView();
     if (!explorer.drawer.hidden) {

@@ -160,11 +160,13 @@ function statusOf(a: string, b: string): ItemStatus {
   return trim(a) === trim(b) ? 'whitespace' : 'modified';
 }
 
-export function createFakeProjectIndexer(opts: { delayMs?: number } = {}): ProjectIndexer & { calls: number } {
+export function createFakeProjectIndexer(opts: { delayMs?: number } = {}): ProjectIndexer & { calls: number; viewDelayMs: number } {
   let last: Record<Side, Scan> | null = null;
   let generation = 0;
   const indexer = {
     calls: 0,
+    /** Simulated decode time per viewText call (Page sources are inflated on demand). */
+    viewDelayMs: 0,
     async index(textA: string, textB: string): Promise<ProjectIndex> {
       const gen = ++generation;
       indexer.calls++;
@@ -197,6 +199,7 @@ export function createFakeProjectIndexer(opts: { delayMs?: number } = {}): Proje
     },
     async viewText(itemId: string, view: ItemViewKind['id'], side: Side): Promise<string | null> {
       const raw = last?.[side].items.get(itemId);
+      if (indexer.viewDelayMs > 0) await new Promise((r) => setTimeout(r, indexer.viewDelayMs));
       return raw ? viewOf(raw, view) : null;
     },
     dispose(): void {
