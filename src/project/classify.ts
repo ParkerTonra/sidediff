@@ -35,8 +35,8 @@ export interface Classified {
   detail: string;
   screenId?: string;
   code: CodeSpec | null;
-  /** Label of the XML view ("Changes" for a Page whose element holds the control delta). */
-  xmlLabel: string;
+  /** Offer a "changes" view: only the element's child lines (a Page's control delta). */
+  changes: boolean;
 }
 
 interface Rule {
@@ -60,7 +60,7 @@ interface Rule {
   code?: (item: RawItem) => CodeSpec | null;
   codeLabel?: string | ((item: RawItem) => string);
   codeLanguage?: LanguageId | ((item: RawItem) => LanguageId | null);
-  xmlLabel?: (item: RawItem) => string;
+  changes?: (item: RawItem) => boolean;
 }
 
 const GRAPH_TYPES: Record<string, string> = {
@@ -156,7 +156,7 @@ export const RULES: readonly Rule[] = [
       }
       return { label: ext(it.attrs.path ?? '') === 'html' ? 'HTML' : 'ASPX', language: 'xml', source: { kind: 'deflate', base64: src } };
     },
-    xmlLabel: (it) => (it.childCount > 0 ? 'Changes' : 'XML'),
+    changes: (it) => it.childCount > 0,
   },
   {
     elements: ['File'],
@@ -283,7 +283,7 @@ export function classify(item: RawItem, ordinal: number): Classified {
     item.cdata.length ? { label, language, source: { kind: 'cdata', sections: item.cdata } } : null;
 
   if (!rule) {
-    return { group: 'other', identity: base, name: base, detail: item.element, code: defaultCode('Code', null), xmlLabel: 'XML' };
+    return { group: 'other', identity: base, name: base, detail: item.element, code: defaultCode('Code', null), changes: false };
   }
   const identity = rule.identity ? rule.identity(item, base) : base;
   const label = typeof rule.codeLabel === 'function' ? rule.codeLabel(item) : (rule.codeLabel ?? 'Code');
@@ -296,6 +296,6 @@ export function classify(item: RawItem, ordinal: number): Classified {
     detail: rule.detail ? rule.detail(item) : '',
     ...(screenId ? { screenId } : {}),
     code: rule.code ? rule.code(item) : defaultCode(label, language),
-    xmlLabel: rule.xmlLabel ? rule.xmlLabel(item) : 'XML',
+    changes: rule.changes ? rule.changes(item) : false,
   };
 }

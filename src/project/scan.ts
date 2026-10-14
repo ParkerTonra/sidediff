@@ -33,6 +33,9 @@ export interface RawItem {
   descendantCounts: Record<string, number>;
   /** Number of direct child elements (CDATA wrappers excluded). */
   childCount: number;
+  /** Offsets from the first direct child's `<` to just past the last one's end; -1 when none. */
+  childStart: number;
+  childEnd: number;
   /** Descendants named in `wants.capture`, with the CDATA sections inside each. */
   captured: CapturedElement[];
   /** Attributes of the first `wants.firstRow.element` that has one of `anyOf` (first 64 KB). */
@@ -234,6 +237,8 @@ export function scanProject(text: string, wantsFor: WantsFor = () => null): Scan
       descendantAttrs: {},
       descendantCounts: {},
       childCount: 0,
+      childStart: -1,
+      childEnd: -1,
       captured: [],
       firstRow: null,
     };
@@ -294,6 +299,7 @@ export function scanProject(text: string, wantsFor: WantsFor = () => null): Scan
         if (gt === -1) fail('Unexpected end of text inside an end tag', i);
         i = gt + 1;
         if (name === 'CDATA') section = null;
+        else if (stack.length === 1) item.childEnd = i;
         if (cap && stack.length === capDepth) cap = null;
         continue;
       }
@@ -301,7 +307,11 @@ export function scanProject(text: string, wantsFor: WantsFor = () => null): Scan
       if (ne === i + 1) fail('Malformed tag', i);
       const name = text.slice(i + 1, ne);
       const isWrapper = name === 'CDATA';
-      if (stack.length === 1 && !isWrapper) item.childCount++;
+      const direct = stack.length === 1 && !isWrapper;
+      if (direct) {
+        item.childCount++;
+        if (item.childStart < 0) item.childStart = i;
+      }
       if (wantCount.has(name)) item.descendantCounts[name] = (item.descendantCounts[name] ?? 0) + 1;
       const isCapture = capture.has(name);
       const isRow = !rowDone && rowWant !== undefined && name === rowWant.element && i < descLimit;
@@ -338,6 +348,7 @@ export function scanProject(text: string, wantsFor: WantsFor = () => null): Scan
           }
         }
       }
+      if (direct && t.selfClosing) item.childEnd = i;
       if (!t.selfClosing) stack.push(name);
     }
     item.end = i;

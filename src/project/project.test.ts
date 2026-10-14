@@ -152,7 +152,8 @@ describe('classifier table', () => {
 
     const p2 = await one(`<Page path="~/pages/so/so301000.aspx" pageSource="${deflate64('<a/>')}">\n  <PXGrid ID="grid"><Columns/></PXGrid>\n</Page>`);
     expect(p2).toMatchObject({ detail: 'Screen customization' });
-    expect(p2.views.map((v) => `${v.id}:${v.label}`)).toEqual(['code:ASPX', 'xml:Changes']);
+    expect(p2.views.map((v) => `${v.id}:${v.label}:${v.language}`)).toEqual(['code:ASPX:xml', 'changes:Changes:xml', 'xml:XML:xml']);
+    expect(p2.slices.a && (await sliceViewText(p2.text, p2.slices.a, 'changes'))).toBe('  <PXGrid ID="grid"><Columns/></PXGrid>');
 
     const p3 = await one(`<Page path="~/pages/so/so301000.html" isModernUIOnlyNode="True" pageSource="${deflate64('<b/>')}" />`);
     expect(p3).toMatchObject({ detail: 'Modern UI page', name: 'SO301000' });
@@ -289,6 +290,38 @@ describe('classifier table', () => {
 });
 
 describe('index: ids, matching, status, views', () => {
+  it('Page "changes" view: only the child lines; it is the default view (and status) when there is no pageSource', async () => {
+    const pg = (kids: string) => `<Page path="~/pages/so/so301000.aspx">\r\n${kids}\r\n</Page>`;
+    const kids = '  <PXGrid ID="g">\r\n    <Columns/>\r\n  </PXGrid>\r\n  <PXField ID="f" />';
+    const it0 = await one(pg(kids));
+    expect(it0.views.map((v) => v.id)).toEqual(['changes', 'xml']);
+    expect(it0.slices.a && (await sliceViewText(it0.text, it0.slices.a, 'changes'))).toBe(kids);
+    const idx = await buildIndex(proj(pg(kids)), proj(pg(kids.replace('ID="f"', 'ID="h"'))));
+    expect(idx.items[0]?.status).toBe('modified');
+    const { createWorker } = fakeWorkers();
+    const ix = createProjectIndexer({ createWorker });
+    await ix.index(proj(pg(kids)), proj('<Table TableName="T"/>'));
+    expect(await ix.viewText('Page:~/pages/so/so301000.aspx', 'changes', 'a')).toBe(kids);
+    expect(await ix.viewText('Table:T', 'changes', 'b')).toBeNull();
+  });
+
+  it('duplicates: identical elements pair first, so a delete/insert/move does not cascade', async () => {
+    const t = (v: string) => `<Table TableName="T"><Column ColumnName="${v}"/></Table>`;
+    const p = (...vs: string[]) => proj(vs.map(t).join('\n'));
+    const st = (idx: Awaited<ReturnType<typeof buildIndex>>) => idx.items.map((i) => `${i.id}=${i.status}`).sort();
+    // delete the first of three
+    expect(st(await buildIndex(p('x', 'y', 'z'), p('y', 'z')))).toEqual(['Table:T#2=same', 'Table:T#3=same', 'Table:T=only-a']);
+    // insert at the front
+    expect(st(await buildIndex(p('y', 'z'), p('new', 'y', 'z')))).toEqual(['Table:T#2=same', 'Table:T#3=only-b', 'Table:T=same']);
+    // move (reorder) among duplicates
+    expect(st(await buildIndex(p('x', 'y', 'z'), p('z', 'x', 'y')))).toEqual(['Table:T#2=same', 'Table:T#3=same', 'Table:T=same']);
+    // one modified + one deleted: identical ones pair first, the rest pair in document order
+    const idx = await buildIndex(p('x', 'y', 'z'), p('y', 'Z2'));
+    expect(st(idx)).toEqual(['Table:T#2=same', 'Table:T#3=only-a', 'Table:T=modified']);
+    const paired = idx.items.find((i) => i.id === 'Table:T');
+    expect([paired?.a?.startLine, paired?.b?.startLine]).toEqual([3, 4]); // x (A line 3) ↔ Z2 (B line 4)
+  });
+
   it('duplicate ids get #2, #3 in document order', async () => {
     const idx = await buildIndex(proj('<Table TableName="T"/>\n<Table TableName="T"><Column/></Table>\n<Table TableName="T"/>'), '');
     expect(idx.items.map((i) => i.id).sort()).toEqual(['Table:T', 'Table:T#2', 'Table:T#3']);
@@ -485,7 +518,9 @@ describe.skipIf(!existsSync('fixtures/project-a.xml'))('project fixture pair vs 
       }
       got.delete(e.id);
       // `detail` is left to the classifier tests: the sidecar predates e0d55ac's detail rules.
-      const actual = { element: g.element, group: g.group, name: g.name, status: g.status, views: g.views.map((v) => v.id), a: g.a, b: g.b };
+      // The sidecar may predate the 'changes' view (da0a450); compare without it then.
+      const gotViews = g.views.map((v) => v.id).filter((v) => v !== 'changes' || e.views.includes('changes'));
+      const actual = { element: g.element, group: g.group, name: g.name, status: g.status, views: gotViews, a: g.a, b: g.b };
       const want = { element: e.element, group: e.group, name: e.name, status: e.status, views: e.views, a: e.a, b: e.b };
       for (const k of Object.keys(want) as (keyof typeof want)[]) {
         if (JSON.stringify(actual[k]) !== JSON.stringify(want[k])) diffs.push(`${e.id}.${k}: got ${JSON.stringify(actual[k])}, want ${JSON.stringify(want[k])}`);

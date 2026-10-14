@@ -10,6 +10,9 @@ import { cdataBody, elementLines, scanProject, type CdataSection, type RawItem }
 export interface SideSlice {
   start: number;
   end: number;
+  /** Direct-children range for the "changes" view; -1 when none. */
+  childStart: number;
+  childEnd: number;
   code: CodeSource | null;
 }
 
@@ -23,7 +26,8 @@ export interface BuiltIndex extends Omit<ProjectIndex, 'items'> {
 }
 
 interface SideEntry {
-  id: string;
+  /** `${element}:${identity}`, before duplicate numbering (that happens when matching). */
+  base: string;
   c: Classified;
   raw: RawItem;
 }
@@ -40,16 +44,12 @@ function scanSide(text: string): { info: ProjectSideInfo; entries: SideEntry[] }
   const t0 = performance.now();
   const scan = scanProject(text, wantsFor);
   const ordinals = new Map<string, number>();
-  const seen = new Map<string, number>();
   const entries: SideEntry[] = [];
   for (const raw of scan.items) {
     const ord = (ordinals.get(raw.element) ?? 0) + 1;
     ordinals.set(raw.element, ord);
     const c = classify(raw, ord);
-    const base = `${raw.element}:${c.identity}`;
-    const dup = (seen.get(base) ?? 0) + 1;
-    seen.set(base, dup);
-    entries.push({ id: dup === 1 ? base : `${base}#${dup}`, c, raw });
+    entries.push({ base: `${raw.element}:${c.identity}`, c, raw });
   }
   const info: ProjectSideInfo = {
     isProject: scan.isProject,
@@ -99,6 +99,7 @@ export async function inflateBase64(b64: string): Promise<string> {
 
 export async function sliceViewText(text: string, s: SideSlice, view: ItemViewKind['id']): Promise<string | null> {
   if (view === 'xml') return elementLines(text, s);
+  if (view === 'changes') return changesText(text, s);
   if (!s.code) return null;
   if (s.code.kind === 'deflate') {
     try {
@@ -108,6 +109,11 @@ export async function sliceViewText(text: string, s: SideSlice, view: ItemViewKi
     }
   }
   return codeTextSync(text, s.code);
+}
+
+/** The lines of an element's direct children only (from the first one's line to the last one's). */
+export function changesText(text: string, s: SideSlice): string | null {
+  return s.childStart < 0 ? null : elementLines(text, { start: s.childStart, end: s.childEnd });
 }
 
 // --- status -----------------------------------------------------------------------
@@ -145,6 +151,83 @@ async function codeStatus(a: string, b: string, sa: CodeSource | null, sb: CodeS
   return ta === null || tb === null ? 'modified' : compareTexts(ta, tb);
 }
 
+// --- matching -------------------------------------------------------------------------
+
+const toSlice = (e: SideEntry): SideSlice => ({
+  start: e.raw.start,
+  end: e.raw.end,
+  childStart: e.raw.childStart,
+  childEnd: e.raw.childEnd,
+  code: e.c.code?.source ?? null,
+});
+
+type Pair = [id: string, a: SideEntry | undefined, b: SideEntry | undefined];
+
+/**
+ * Pairs A and B items by base id. A unique base pairs directly. Within a run of
+ * duplicates, identical elements pair first (so an insert, delete or move among
+ * same-named elements doesn't shift every later pairing), then the rest pair in
+ * document order; leftovers are only-a / only-b. Ids are numbered `base`,
+ * `base#2`, … in A's order, then B-only leftovers.
+ */
+export function matchEntries(a: string, b: string, ea: SideEntry[], eb: SideEntry[]): Pair[] {
+  const group = (es: SideEntry[]) => {
+    const m = new Map<string, SideEntry[]>();
+    for (const e of es) {
+      const l = m.get(e.base);
+      if (l) l.push(e);
+      else m.set(e.base, [e]);
+    }
+    return m;
+  };
+  const ga = group(ea);
+  const gb = group(eb);
+  const out: Pair[] = [];
+  const idFor = (base: string, k: number) => (k === 1 ? base : `${base}#${k}`);
+  const emit = (base: string, la: SideEntry[], lb: SideEntry[]) => {
+    if (la.length <= 1 && lb.length <= 1) {
+      out.push([base, la[0], lb[0]]);
+      return;
+    }
+    const text = (t: string, e: SideEntry) => t.slice(e.raw.start, e.raw.end);
+    const matchOf: (number | undefined)[] = new Array<number | undefined>(la.length);
+    const used = new Set<number>();
+    const byText = new Map<string, number[]>();
+    lb.forEach((e, j) => {
+      const k = text(b, e);
+      const q = byText.get(k);
+      if (q) q.push(j);
+      else byText.set(k, [j]);
+    });
+    la.forEach((e, i) => {
+      const j = byText.get(text(a, e))?.shift();
+      if (j !== undefined) {
+        matchOf[i] = j;
+        used.add(j);
+      }
+    });
+    const rest = lb.map((_, j) => j).filter((j) => !used.has(j));
+    let r = 0;
+    la.forEach((_, i) => {
+      if (matchOf[i] === undefined && r < rest.length) {
+        matchOf[i] = rest[r++];
+      }
+    });
+    let k = 0;
+    la.forEach((e, i) => {
+      const j = matchOf[i];
+      out.push([idFor(base, ++k), e, j === undefined ? undefined : lb[j]]);
+    });
+    for (; r < rest.length; r++) {
+      const j = rest[r];
+      if (j !== undefined) out.push([idFor(base, ++k), undefined, lb[j]]);
+    }
+  };
+  for (const [base, la] of ga) emit(base, la, gb.get(base) ?? []);
+  for (const [base, lb] of gb) if (!ga.has(base)) emit(base, [], lb);
+  return out;
+}
+
 // --- index --------------------------------------------------------------------------
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
@@ -152,14 +235,13 @@ const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'bas
 export async function buildIndex(a: string, b: string): Promise<BuiltIndex> {
   const sa = scanSide(a);
   const sb = scanSide(b);
-  const byIdB = new Map(sb.entries.map((e) => [e.id, e]));
   const items: IndexedItem[] = [];
 
-  const make = async (ea: SideEntry | undefined, eb: SideEntry | undefined): Promise<IndexedItem> => {
+  const make = async (id: string, ea: SideEntry | undefined, eb: SideEntry | undefined): Promise<IndexedItem> => {
     // Group, name and views come from A when present, else B.
     const main = (ea ?? eb) as SideEntry;
-    const slA: SideSlice | null = ea ? { start: ea.raw.start, end: ea.raw.end, code: ea.c.code?.source ?? null } : null;
-    const slB: SideSlice | null = eb ? { start: eb.raw.start, end: eb.raw.end, code: eb.c.code?.source ?? null } : null;
+    const slA = ea ? toSlice(ea) : null;
+    const slB = eb ? toSlice(eb) : null;
     const spec = ea?.c.code ?? eb?.c.code ?? null;
     const views: ItemViewKind[] = [];
     if (spec) {
@@ -170,17 +252,20 @@ export async function buildIndex(a: string, b: string): Promise<BuiltIndex> {
       }
       views.push({ id: 'code', label: spec.label, language });
     }
-    views.push({ id: 'xml', label: main.c.xmlLabel, language: 'xml' });
+    if (ea?.c.changes || eb?.c.changes) views.push({ id: 'changes', label: 'Changes', language: 'xml' });
+    views.push({ id: 'xml', label: 'XML', language: 'xml' });
 
     let status: ItemStatus;
+    const dv = views[0]?.id;
     if (!slA) status = 'only-b';
     else if (!slB) status = 'only-a';
-    else if (views[0]?.id === 'code') status = await codeStatus(a, b, slA.code, slB.code);
+    else if (dv === 'code') status = await codeStatus(a, b, slA.code, slB.code);
+    else if (dv === 'changes') status = compareTexts(changesText(a, slA) ?? '', changesText(b, slB) ?? '');
     else status = compareTexts(elementLines(a, slA), elementLines(b, slB));
 
     const screenId = ea?.c.screenId ?? eb?.c.screenId;
     return {
-      id: main.id,
+      id,
       group: main.c.group,
       element: main.raw.element,
       name: main.c.name,
@@ -194,12 +279,7 @@ export async function buildIndex(a: string, b: string): Promise<BuiltIndex> {
     };
   };
 
-  for (const ea of sa.entries) {
-    const eb = byIdB.get(ea.id);
-    byIdB.delete(ea.id);
-    items.push(await make(ea, eb));
-  }
-  for (const eb of byIdB.values()) items.push(await make(undefined, eb));
+  for (const [id, ea, eb] of matchEntries(a, b, sa.entries, sb.entries)) items.push(await make(id, ea, eb));
 
   const gi = (g: string) => GROUP_ORDER.indexOf(g as (typeof GROUP_ORDER)[number]);
   items.sort((x, y) => gi(x.group) - gi(y.group) || collator.compare(x.name, y.name) || (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
