@@ -162,7 +162,7 @@ async function startApp({ root, engine, registry, project, views, history }: App
   const btnSwap = h('button', { type: 'button', class: 'btn small', 'data-testid': 'btn-swap', title: 'Swap A and B (text and labels)', 'aria-label': 'Swap A and B' }, '⇄ Swap');
   const paneRow = h('div', { class: 'pane-row' }, panes.a.header, h('div', { class: 'swap-cell' }, btnSwap), panes.b.header);
 
-  const degradedBanner = h('div', { class: 'banner banner-warn', 'data-testid': 'degraded-warning', role: 'status', hidden: true });
+  const degradedBanner = h('div', { class: 'banner banner-warn', 'data-testid': 'degraded-warning', hidden: true });
   const errorMsg = h('span', {});
   const btnErrorClose = h('button', { type: 'button', class: 'btn small', 'aria-label': 'Dismiss error' }, 'Dismiss');
   const errorBanner = h('div', { class: 'banner banner-error', 'data-testid': 'diff-error', role: 'alert', hidden: true }, errorMsg, btnErrorClose);
@@ -174,7 +174,7 @@ async function startApp({ root, engine, registry, project, views, history }: App
     b: h('div', { class: 'empty-hint hint-b missing-hint', 'data-testid': 'missing-hint-b', hidden: true }),
   };
   const itemLoadingText = h('span', {});
-  const itemLoading = h('div', { class: 'item-loading', 'data-testid': 'item-loading', role: 'status', hidden: true },
+  const itemLoading = h('div', { class: 'item-loading', 'data-testid': 'item-loading', hidden: true },
     h('span', { class: 'spinner', 'aria-hidden': 'true' }), itemLoadingText);
   const editorWrap = h('div', { class: 'editor-wrap' }, editorEl, panes.a.hint, panes.b.hint, missing.a, missing.b, panes.a.drop, panes.b.drop, itemLoading);
   addDropTarget(editorWrap, (e) => {
@@ -213,7 +213,7 @@ async function startApp({ root, engine, registry, project, views, history }: App
   // ---------- item view breadcrumb ----------
   const btnBack = h('button', { type: 'button', class: 'btn small', 'data-testid': 'btn-back', title: 'Back to the whole project (Alt+Left, Esc)' }, '← Project');
   const crumbGroup = h('span', { class: 'crumb-group' });
-  const crumbName = h('strong', { class: 'crumb-name' });
+  const crumbName = h('strong', { class: 'crumb-name', 'aria-current': 'page' });
   const crumbDetail = h('span', { class: 'crumb-detail' });
   const crumbStatus = h('span', { class: 'crumb-status' });
   // One button per view kind of the open item (code / changes / xml), labelled by the indexer.
@@ -223,7 +223,7 @@ async function startApp({ root, engine, registry, project, views, history }: App
   const relatedBox = h('span', { class: 'item-related', 'data-testid': 'item-related', role: 'group', 'aria-label': 'Related items of this screen', hidden: true });
   const btnPrevItem = h('button', { type: 'button', class: 'btn small', 'data-testid': 'btn-prev-item', 'aria-label': 'Previous item', title: 'Previous item (Alt+PageUp)' }, '‹');
   const btnNextItem = h('button', { type: 'button', class: 'btn small', 'data-testid': 'btn-next-item', 'aria-label': 'Next item', title: 'Next item (Alt+PageDown)' }, '›');
-  const itemBar = h('nav', { class: 'item-bar', 'data-testid': 'item-bar', 'aria-label': 'Item view', hidden: true },
+  const itemBar = h('nav', { class: 'item-bar', 'data-testid': 'item-bar', 'aria-label': 'Item breadcrumb', hidden: true },
     btnBack, h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '/'), crumbGroup, h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '/'),
     crumbStatus, crumbName, crumbDetail, viewSwitch, relatedBox, h('span', { class: 'spacer' }), btnShowInProject, btnPrevItem, itemPos, btnNextItem);
 
@@ -237,7 +237,12 @@ async function startApp({ root, engine, registry, project, views, history }: App
   const quickOpen = h('dialog', { class: 'dialog quick-open', 'data-testid': 'quick-open', 'aria-label': 'Quick open' }, qoInput, qoList, qoFoot);
 
   // ---------- toasts ----------
-  const toast = h('div', { class: 'toast', 'data-testid': 'toast', role: 'status', 'aria-live': 'polite', hidden: true });
+  const toast = h('div', { class: 'toast', 'data-testid': 'toast', hidden: true });
+  // One polite live region that is always in the DOM. Toasts, the degraded banner, the
+  // item-loading pill and item open/Back are announced through it: it is emptied, then
+  // filled a moment later, which screen readers reliably pick up (unlike a region that
+  // is un-hidden and filled in the same tick).
+  const announcer = h('div', { class: 'visually-hidden', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true', 'data-testid': 'announcer' });
 
   const explorer = createExplorer({
     settings: explorerSettings,
@@ -250,7 +255,7 @@ async function startApp({ root, engine, registry, project, views, history }: App
   const workspace = h('div', { class: 'workspace' }, explorer.drawer, explorer.splitter, mainCol);
 
   root.classList.add('sd-app');
-  root.replaceChildren(toolbar, workspace, statsBar, toast, shortcutsDialog, addLangDialog, quickOpen);
+  root.replaceChildren(announcer, toolbar, workspace, statsBar, toast, shortcutsDialog, addLangDialog, quickOpen);
 
   // ---------- rendering ----------
   function renderLabels(syncInputs: boolean): void {
@@ -329,6 +334,7 @@ async function startApp({ root, engine, registry, project, views, history }: App
     if (!info) return;
     const which = info.sides.map((s) => `${settings.labels[s]} (${fmt(info.lines[s])} lines, ${formatBytes(info.bytes[s])})`).join(' and ');
     degradedBanner.textContent = `Degraded mode for large input: ${which}. ${info.reason}`;
+    announce(degradedBanner.textContent);
   }
 
   function setComputing(computing: boolean, text = ''): void {
@@ -435,8 +441,16 @@ async function startApp({ root, engine, registry, project, views, history }: App
     else engine.setText(side, text);
   }
 
+  let announceTimer: ReturnType<typeof setTimeout> | undefined;
+  function announce(text: string): void {
+    announcer.textContent = '';
+    clearTimeout(announceTimer);
+    announceTimer = setTimeout(() => (announcer.textContent = text), 100);
+  }
+
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
   function showToast(text: string): void {
+    announce(text);
     toast.textContent = text;
     toast.hidden = false;
     clearTimeout(toastTimer);
@@ -518,7 +532,7 @@ async function startApp({ root, engine, registry, project, views, history }: App
     const id = current.item.id;
     const still = isProject() ? next.items.find((i) => i.id === id) : undefined;
     if (still) {
-      void openItem(still, current.view.id);
+      void openItem(still, current.view.id, true);
     } else {
       const name = current.item.name;
       views?.closeView();
@@ -528,7 +542,7 @@ async function startApp({ root, engine, registry, project, views, history }: App
 
   let openSeq = 0;
   let loadingTimer: ReturnType<typeof setTimeout> | undefined;
-  async function openItem(item: ProjectItem, viewId?: ItemViewKind['id']): Promise<void> {
+  async function openItem(item: ProjectItem, viewId?: ItemViewKind['id'], quiet = false): Promise<void> {
     if (!views || !project || !ready) return;
     const kind = item.views.find((v) => v.id === viewId) ?? item.views[0];
     if (!kind) return;
@@ -539,6 +553,7 @@ async function startApp({ root, engine, registry, project, views, history }: App
       if (seq !== openSeq) return;
       itemLoadingText.textContent = `Opening ${item.name}…`;
       itemLoading.hidden = false;
+      announce(itemLoadingText.textContent);
     }, ITEM_LOADING_DELAY_MS);
     const done = (): void => {
       if (seq !== openSeq) return;
@@ -567,6 +582,10 @@ async function startApp({ root, engine, registry, project, views, history }: App
     selectLang.value = language;
     explorer.setActive(item.id);
     renderItemBar();
+    if (!quiet) {
+      const viewNote = item.views.length > 1 ? ` ${kind.label} view.` : '';
+      announce(`Opened ${item.name}, ${statusWord(item.status, settings.labels)}.${viewNote} Alt+Left to go back.`);
+    }
   }
 
   function renderItemBar(): void {
@@ -649,6 +668,7 @@ async function startApp({ root, engine, registry, project, views, history }: App
     openSeq++;
     clearTimeout(loadingTimer);
     itemLoading.hidden = true;
+    announce('Back to the whole project');
     const id = current.item.id;
     views.closeView();
     if (!explorer.drawer.hidden) {
@@ -660,6 +680,7 @@ async function startApp({ root, engine, registry, project, views, history }: App
   function showInProject(): void {
     if (!current || !views) return;
     const side: Side = current.item.b ? 'b' : 'a';
+    announce(`Showing ${current.item.name} in the whole project, ${settings.labels[side]}`);
     views.revealLine(side, current.item[side]?.startLine ?? 1);
   }
 
