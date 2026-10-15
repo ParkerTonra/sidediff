@@ -149,3 +149,9 @@ export async function clickEditor(page: Page, side: Side): Promise<void> {
     .first()
     .click({ position: { x: 120, y: 30 } });
 }
+
+/** Waits until no diff is computing, so a late diff:done can't reset what the next step does. */
+export async function waitIdle(page: Page, timeout = 60_000): Promise<void> {
+  await page.waitForFunction(() => window.__sidediff?.engine.isComputing() === false, undefined, { timeout, polling: 50 });
+  await expect(tid(page, 'progress')).toHaveAttribute('data-state', 'idle');
+}

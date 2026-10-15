@@ -2,7 +2,7 @@
 // (collapse, expand a separator, restore, byte-identical text), navigation
 // buttons and shortcuts, whitespace options, language auto-detect.
 import type { Page } from '@playwright/test';
-import { clickEditor, afterRediff, changePosition, expect, loadPair, openApp, statValue, test, textHash, tid, visibleLinesB, withinTolerance } from './helpers.ts';
+import { clickEditor, waitIdle, afterRediff, changePosition, expect, loadPair, openApp, statValue, test, textHash, tid, visibleLinesB, withinTolerance } from './helpers.ts';
 import type { ChangesJson, StatKey } from './helpers.ts';
 
 // Tests share one loaded page (the pair takes seconds to load) and run in file order.
@@ -15,6 +15,12 @@ test.beforeAll(async ({ browser }) => {
   page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
   await openApp(page);
   c = await loadPair(page, 'large');
+});
+test.beforeEach(async () => {
+  await waitIdle(page);
+});
+test.afterEach(async () => {
+  await waitIdle(page);
 });
 test.afterAll(async () => {
   await page.close();
@@ -106,11 +112,14 @@ test('context lines input changes how much is hidden, both up and down', async (
     await setContext(3);
     await tid(page, 'btn-diff-only').click();
     await expect(tid(page, 'btn-diff-only')).toHaveAttribute('aria-pressed', 'false');
+    // A context change re-diffs; don't let its late diff:done land in the next test.
+    await waitIdle(page);
   }
 });
 
 test('next/prev buttons and F7/Shift+F7/Alt+Down/Alt+Up update "change N of M" and move the viewport', async () => {
   const total = c.expected.trimWhitespace.changes;
+  await waitIdle(page);
   await tid(page, 'btn-next').click();
   const [first, m] = await changePosition(page);
   expect(m).toBe(await statValue(page, 'changes'));
