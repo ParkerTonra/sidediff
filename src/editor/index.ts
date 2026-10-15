@@ -18,7 +18,7 @@ import type {
   ThemeId,
   Unsubscribe,
 } from '../types';
-import { invalidateDiffs, setDiffController } from './diff-provider';
+import { invalidateDiffs, registerDiffController } from './diff-provider';
 import type { DiffController, DiffRunInfo } from './diff-provider';
 import { ReplaceHistory } from './history';
 import {
@@ -120,6 +120,9 @@ interface OpenView {
   saved: monaco.editor.IDiffEditorViewState | null;
   /** The full models that `saved` belongs to. */
   savedModels: Record<Side, TextModel>;
+  /** "change N of M" and the line navigation last placed the cursor on. */
+  savedPosition: ChangePosition;
+  savedPlacedLine: number | null;
 }
 
 export function createDiffEngine(): SideDiffEngine {
@@ -297,7 +300,7 @@ export function createDiffEngine(): SideDiffEngine {
       emit('diff:error', { message: err instanceof Error ? err.message : String(err) });
     },
   };
-  setDiffController(ctl);
+  const unregisterController = registerDiffController(ctl);
 
   function onDiffUpdated(): void {
     if (!diffEditor || inflight > 0) return;
@@ -458,6 +461,8 @@ export function createDiffEngine(): SideDiffEngine {
       language: v.language,
       saved,
       savedModels,
+      savedPosition: previous ? previous.savedPosition : { ...position },
+      savedPlacedLine: previous ? previous.savedPlacedLine : placedLine,
       models: {
         a: monaco.editor.createModel(v.a ?? '', v.language, nextUri('view-a')),
         b: monaco.editor.createModel(v.b ?? '', v.language, nextUri('view-b')),
@@ -487,14 +492,20 @@ export function createDiffEngine(): SideDiffEngine {
     view = null;
     release(closing.models.a);
     release(closing.models.b);
-    setPosition(0, 0, true);
-    placedLine = null;
+    const sameModels = closing.savedModels.a === models.a && closing.savedModels.b === models.b;
+    // Back to where navigation was ("change 40 of 60"), unless the texts changed meanwhile.
+    if (sameModels) {
+      setPosition(closing.savedPosition.index, closing.savedPosition.total, true);
+      placedLine = closing.savedPlacedLine;
+    } else {
+      setPosition(0, 0, true);
+      placedLine = null;
+    }
     revealLines = [];
     stats = null;
     applyEditorOptions();
     if (diffEditor) {
       const ed = diffEditor;
-      const sameModels = closing.savedModels.a === models.a && closing.savedModels.b === models.b;
       // Restore once the diff (and with diff only, its collapsed regions) is back.
       restoreView = () => {
         if (closing.saved && sameModels) ed.restoreViewState(closing.saved);
@@ -812,7 +823,7 @@ export function createDiffEngine(): SideDiffEngine {
 
     dispose() {
       clearTimeout(watchdog);
-      setDiffController(null);
+      unregisterController();
       for (const c of domCleanups.splice(0)) c();
       for (const d of disposables.splice(0)) d.dispose();
       diffEditor?.dispose();

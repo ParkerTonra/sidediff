@@ -26,7 +26,7 @@ export interface DiffRunInfo {
   cancelled: boolean;
 }
 
-/** What the engine plugs in. One engine per page. */
+/** What each engine plugs in. */
 export interface DiffController {
   ignoreAllWhitespace: boolean;
   /** Drop intra-line changes from results. */
@@ -40,13 +40,17 @@ export interface DiffController {
   onRunError(err: unknown): void;
 }
 
-let controller: DiffController | null = null;
+/** One per live engine; a run belongs to the engine that shows its models. */
+const controllers = new Set<DiffController>();
 let installed = false;
 let used = false;
 const liveProviders = new Set<EngineDiffProvider>();
 
-export function setDiffController(c: DiffController | null): void {
-  controller = c;
+export function registerDiffController(c: DiffController): () => void {
+  controllers.add(c);
+  return () => {
+    controllers.delete(c);
+  };
 }
 
 /** Tells every live provider that results would differ now (Monaco recomputes). */
@@ -199,35 +203,35 @@ class EngineDiffProvider {
     options: IDocumentDiffProviderOptions,
     token: CancellationTokenLike,
   ): Promise<IDocumentDiff> {
-    const ctl = controller;
     if (original.isDisposed() || modified.isDisposed()) {
       return { changes: [], identical: true, quitEarly: false, moves: [] };
     }
     // Replaced models stay alive on the undo history (D13), and their old view
-    // model can still fire a debounced run. It must never supersede the run
-    // for what is on screen; nobody waits for its result.
-    if (ctl && !ctl.isCurrent(original, modified)) return new Promise<IDocumentDiff>(() => {});
-    ctl?.onRunStart(original, modified);
+    // model can still fire a debounced run. A run no engine shows must never
+    // supersede the run for what is on screen; nobody waits for its result.
+    const ctl = [...controllers].find((c) => c.isCurrent(original, modified));
+    if (!ctl) return new Promise<IDocumentDiff>(() => {});
+    ctl.onRunStart(original, modified);
     const t0 = performance.now();
     try {
       const opts: IDocumentDiffProviderOptions = {
         ...options,
         computeMoves: false,
-        maxComputationTimeMs: ctl?.maxComputationTimeMs ?? options.maxComputationTimeMs,
+        maxComputationTimeMs: ctl.maxComputationTimeMs ?? options.maxComputationTimeMs,
       };
       // Any newer request makes a running one stale: stop it so this request
       // does not queue behind it in the worker.
       diffWorker.supersede();
       let result = trivialDiff(original, modified);
       if (!result) {
-        result = ctl?.ignoreAllWhitespace
+        result = ctl.ignoreAllWhitespace
           ? await computeIgnoringAllWhitespace(original, modified, opts)
           : await diffWorker.compute(sideOf(original), sideOf(modified), opts);
       }
-      if (ctl?.lineLevelOnly) {
+      if (ctl.lineLevelOnly) {
         result = { ...result, changes: result.changes.map((c) => new DetailedLineRangeMapping(c.original, c.modified, undefined)) };
       }
-      ctl?.onRunEnd({
+      ctl.onRunEnd({
         ms: performance.now() - t0,
         quitEarly: result.quitEarly,
         identical: result.identical,
@@ -236,9 +240,9 @@ class EngineDiffProvider {
       return result;
     } catch (err) {
       if (err instanceof Superseded || token.isCancellationRequested || original.isDisposed() || modified.isDisposed()) {
-        ctl?.onRunEnd({ ms: performance.now() - t0, quitEarly: true, identical: false, cancelled: true });
+        ctl.onRunEnd({ ms: performance.now() - t0, quitEarly: true, identical: false, cancelled: true });
       } else {
-        ctl?.onRunError(err);
+        ctl.onRunError(err);
       }
       // Leave Monaco waiting: a superseded run has a newer run behind it, and
       // after an error the previous decorations stay until the next edit.

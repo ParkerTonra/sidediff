@@ -4,6 +4,7 @@
 // DECISIONS.md D11.
 import { DefaultLinesDiffComputer } from 'monaco-editor/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer';
 import type { DiffWorkerRequest, DiffWorkerResponse, SerializedChange } from './diff-worker-protocol';
+import { fixLongLineChanges, maskLongLines } from './long-lines';
 
 const texts: Record<'o' | 'm', { key: string; lines: string[] } | null> = { o: null, m: null };
 const computer = new DefaultLinesDiffComputer();
@@ -33,8 +34,11 @@ self.onmessage = (ev: MessageEvent<DiffWorkerRequest>) => {
   }
   try {
     const t0 = performance.now();
-    const r = computer.computeDiff(o.lines, m.lines, msg.options);
-    const changes: SerializedChange[] = r.changes.map((c) => [
+    // Long lines are diffed as content-hash tokens: no character diff (D14).
+    const mo = maskLongLines(o.lines, msg.options.ignoreTrimWhitespace);
+    const mm = maskLongLines(m.lines, msg.options.ignoreTrimWhitespace);
+    const r = computer.computeDiff(mo.lines, mm.lines, msg.options);
+    const raw: SerializedChange[] = r.changes.map((c) => [
       c.original.startLineNumber,
       c.original.endLineNumberExclusive,
       c.modified.startLineNumber,
@@ -50,6 +54,7 @@ self.onmessage = (ev: MessageEvent<DiffWorkerRequest>) => {
         i.modifiedRange.endColumn,
       ]),
     ]);
+    const changes = fixLongLineChanges(raw, o.lines, m.lines, mo.long, mm.long);
     reply({
       type: 'result',
       id: msg.id,

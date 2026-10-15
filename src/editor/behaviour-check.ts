@@ -550,7 +550,7 @@ async function main(): Promise<void> {
   await page.waitForTimeout(200);
   const restored = await page.evaluate(() => {
     const m = window.__monacoModified!()!;
-    return { top: m.getScrollTop(), line: m.getPosition()?.lineNumber, key: window.__engine!.getView() };
+    return { top: m.getScrollTop(), line: m.getPosition()?.lineNumber, key: window.__engine!.getView(), pos: window.__engine!.getPosition().index };
   });
   check(
     'item view: shows the item, read-only, full texts untouched',
@@ -558,8 +558,8 @@ async function main(): Promise<void> {
     JSON.stringify({ ...inView, readOnly }),
   );
   check(
-    'closeView restores the full view scroll and cursor',
-    restored.key === null && restored.top === fullState.top && restored.line === fullState.line && viewEvents.join(',') === 'Graph:Foo#code,null',
+    'closeView restores the full view scroll, cursor and change index',
+    restored.key === null && restored.top === fullState.top && restored.line === fullState.line && restored.pos === 40 && fullState.pos === 40 && viewEvents.join(',') === 'Graph:Foo#code,null',
     JSON.stringify({ fullState, restored, viewEvents }),
   );
 
@@ -606,6 +606,29 @@ async function main(): Promise<void> {
     return { before, during, after: window.__liveModels!() };
   });
   check('dispose frees every kept model', leak.during > leak.before && leak.after === leak.before, JSON.stringify(leak));
+
+  // --- long changed lines get no character diff (D14) -------------------------
+  const proj = await page.evaluate(async () => {
+    const get = async (s: string): Promise<string | null> => {
+      const r = await fetch(`/fixtures/project-${s}.xml`);
+      return r.ok ? r.text() : null;
+    };
+    const [a, b] = await Promise.all([get('a'), get('b')]);
+    if (!a || !b) return null;
+    const e = window.__engine!;
+    const t0 = performance.now();
+    const st = await new Promise<{ changes: number; quitEarly: boolean }>((r) => {
+      const off = e.on('diff:done', (s) => {
+        off();
+        r(s);
+      });
+      e.setText('a', a);
+      e.setText('b', b);
+    });
+    return { ms: Math.round(performance.now() - t0), changes: st.changes, quitEarly: st.quitEarly };
+  });
+  if (proj) check('project pair with a changed 20k-char line: diff < 1 s, not approximate', proj.ms < 1000 && !proj.quitEarly && proj.changes === 60, JSON.stringify(proj));
+  else console.log('SKIP project pair: run `pnpm fixtures --only project`');
 
   check('no console errors', errors.length === 0, errors.slice(0, 5).join(' | '));
   await browser.close();
