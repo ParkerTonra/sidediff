@@ -554,6 +554,34 @@ async function projectIndexLines(page: Page, from: number): Promise<void> {
   }
 }
 
+/** Project pair (CRLF, ~20k-character pageSource lines): diff ready < 1 s and exact (not quitEarly). */
+async function projectScenario(browser: Browser): Promise<void> {
+  const { page, path } = await openApp(browser);
+  const metric = 'Project pair diff ready';
+  try {
+    await loadSide(page, path, 'a', join(ROOT, 'fixtures/project-a.xml'), 30_000);
+    const b = await loadSide(page, path, 'b', join(ROOT, 'fixtures/project-b.xml'), 30_000);
+    const done = await waitMark(page, 'sidediff:diff-done', b.start, 30_000);
+    if (done === null) {
+      add({ metric, value: 'no sidediff:diff-done mark in 30 s', target: '< 1000 ms, exact', status: 'ERROR' });
+    } else {
+      const stats = (await page.evaluate(() => window.__sidediff?.engine.getStats() ?? null)) as DiffStats | null;
+      const t = done - b.start;
+      const exact = stats !== null && !stats.quitEarly;
+      add({
+        metric,
+        value: ms(t),
+        target: '< 1000 ms, exact',
+        status: exact ? gate(t, 1000) : 'FAIL',
+        note: stats ? `B load start → diff-done; ${stats.changes} changes, computeMs ${stats.computeMs}${stats.quitEarly ? ', APPROXIMATE (quitEarly)' : ''}` : 'no stats',
+      });
+    }
+  } catch (e) {
+    add({ metric, value: errText(e), target: '< 1000 ms, exact', status: 'ERROR' });
+  }
+  await page.context().close();
+}
+
 async function stressScenario(browser: Browser): Promise<void> {
   const { page, path, crashed } = await openApp(browser);
   if (!(await page.evaluate(() => !!window.__sidediff))) {
@@ -597,7 +625,7 @@ function printTable(): void {
 }
 
 async function main(): Promise<number> {
-  ensureFixtures(args.has('--skip-stress') ? ['large'] : ['large', 'stress']);
+  ensureFixtures(args.has('--skip-stress') ? ['large', 'project'] : ['large', 'project', 'stress']);
   if (!args.has('--no-build')) build();
   bundleReport();
   const server = await serve();
@@ -607,6 +635,8 @@ async function main(): Promise<number> {
   try {
     console.log('\nlarge pair:');
     await largeScenario(browser, pid);
+    console.log('\nproject pair:');
+    await projectScenario(browser);
     if (!args.has('--skip-stress')) {
       console.log('\nstress pair:');
       await stressScenario(browser);

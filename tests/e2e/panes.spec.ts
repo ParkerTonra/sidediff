@@ -2,7 +2,7 @@
 // inline; language selector, detection (file and paste), highlighting; find,
 // folding, word wrap.
 import { readFileSync } from 'node:fs';
-import { expect, fixturePath, loadPair, openApp, test, textHash, tid, waitForDiff, changes } from './helpers.ts';
+import { clickEditor, expect, fixturePath, loadPair, openApp, test, textHash, tid, waitForDiff, changes } from './helpers.ts';
 
 test.use({ viewport: { width: 1600, height: 1000 } });
 
@@ -106,7 +106,7 @@ test('paste detects the language (XML then C#)', async ({ page, context }) => {
   await expect(tid(page, 'select-language')).toHaveValue('plaintext');
   const paste = async (side: 'a' | 'b', text: string): Promise<void> => {
     await page.evaluate((t) => navigator.clipboard.writeText(t), text);
-    await page.locator(`.monaco-diff-editor .editor.${side === 'a' ? 'original' : 'modified'} .view-lines`).first().click();
+    await clickEditor(page, side);
     await page.keyboard.press('Control+V');
   };
   await paste('a', '<Customization level="100">\n  <Graph ClassName="SOOrderEntry" />\n</Customization>\n');
@@ -137,7 +137,7 @@ test('syntax highlighting differs per language and works in both themes', async 
 test('Ctrl+F opens find in the focused pane', async ({ page }) => {
   await openApp(page);
   await loadPair(page, 'small');
-  await page.locator('.monaco-diff-editor .editor.modified .view-lines').first().click();
+  await clickEditor(page, 'b');
   await page.keyboard.press('Control+F');
   await expect(page.locator('.monaco-diff-editor .editor.modified .find-widget.visible')).toBeVisible();
   await page.keyboard.type('Customization');

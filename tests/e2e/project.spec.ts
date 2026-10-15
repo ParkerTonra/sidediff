@@ -2,7 +2,7 @@
 // whole-text undo"). Item 6 (indexing time / long tasks) is in `pnpm bench`.
 import type { Locator, Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { expect, fixturePath, loadFile, openApp, ROOT, statValue, test, textHash, tid, visibleLinesB, waitForDiff } from './helpers.ts';
+import { clickEditor, expect, fixturePath, loadFile, openApp, ROOT, statValue, test, textHash, tid, visibleLinesB, waitForDiff } from './helpers.ts';
 import { join } from 'node:path';
 
 interface Item {
@@ -228,10 +228,11 @@ test('5. whole-text undo: clear, paste, file load, swap; typed edits use Monaco 
 
   // Paste-replace in A, then undo.
   await page.evaluate(() => navigator.clipboard.writeText('using System;\nnamespace Pasted { }\n'));
-  await page.locator('.monaco-diff-editor .editor.original .view-lines').first().click();
+  await clickEditor(page, 'a');
   await page.keyboard.press('Control+A');
   await page.keyboard.press('Control+V');
-  await expect.poll(() => page.evaluate(() => window.__sidediff?.engine.getText('a'))).toBe('using System;\nnamespace Pasted { }\n');
+  // The Windows clipboard hands Monaco CRLF; compare line content.
+  await expect.poll(() => page.evaluate(() => window.__sidediff?.engine.getText('a').replace(/\r\n/g, '\n'))).toBe('using System;\nnamespace Pasted { }\n');
   await page.keyboard.press('Control+Z');
   await expect.poll(() => textHash(page, 'a')).toBe(P.a.sha256);
 
@@ -251,7 +252,7 @@ test('5. whole-text undo: clear, paste, file load, swap; typed edits use Monaco 
   expect(await textHash(page, 'b')).toBe(P.b.sha256);
 
   // Typed edits still undo through Monaco's own stack.
-  await page.locator('.monaco-diff-editor .editor.modified .view-lines').first().click();
+  await clickEditor(page, 'b');
   await page.keyboard.press('Control+Home');
   await page.keyboard.type('XYZ');
   await expect.poll(() => page.evaluate(() => window.__sidediff?.engine.getText('b').startsWith('XYZ'))).toBe(true);

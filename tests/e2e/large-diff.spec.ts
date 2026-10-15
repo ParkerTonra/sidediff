@@ -2,7 +2,7 @@
 // (collapse, expand a separator, restore, byte-identical text), navigation
 // buttons and shortcuts, whitespace options, language auto-detect.
 import type { Page } from '@playwright/test';
-import { afterRediff, changePosition, expect, loadPair, openApp, statValue, test, textHash, tid, visibleLinesB, withinTolerance } from './helpers.ts';
+import { clickEditor, afterRediff, changePosition, expect, loadPair, openApp, statValue, test, textHash, tid, visibleLinesB, withinTolerance } from './helpers.ts';
 import type { ChangesJson, StatKey } from './helpers.ts';
 
 // Tests share one loaded page (the pair takes seconds to load) and run in file order.
@@ -126,7 +126,11 @@ test('next/prev buttons and F7/Shift+F7/Alt+Down/Alt+Up update "change N of M" a
   await expectAt(first);
 
   // Shortcuts work with focus inside the editor (capture phase).
-  await page.locator('.monaco-diff-editor .editor.modified .view-lines').first().click();
+  await clickEditor(page, 'b');
+  // Navigation is relative to the cursor, and the click just moved it: re-anchor (focus stays in B).
+  await page.evaluate((n) => window.__sidediff?.engine.goToChange(n), first);
+  await expectAt(first);
+  expect(await page.evaluate(() => !!document.activeElement?.closest('.monaco-diff-editor'))).toBe(true);
   await page.keyboard.press('F7');
   await expectAt(first + 1);
   await page.keyboard.press('Shift+F7');

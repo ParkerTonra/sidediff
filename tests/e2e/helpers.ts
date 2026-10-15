@@ -137,3 +137,15 @@ export async function changePosition(page: Page): Promise<[number, number]> {
   const num = (s: string | undefined): number => Number((s ?? '').replace(/[^\d]/g, ''));
   return [num(m[1]), num(m[2])];
 }
+
+/**
+ * Focuses a pane by clicking a visible spot inside its viewport-sized
+ * `.overflow-guard` (`.view-lines` is as tall as the model and scrolls, so
+ * its own coordinates can be far off screen).
+ */
+export async function clickEditor(page: Page, side: Side): Promise<void> {
+  await page
+    .locator(`.monaco-diff-editor .editor.${side === 'a' ? 'original' : 'modified'} .overflow-guard`)
+    .first()
+    .click({ position: { x: 120, y: 30 } });
+}
