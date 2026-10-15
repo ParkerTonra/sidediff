@@ -237,7 +237,15 @@ function rendererMemory(browserPid: number | undefined): number | null {
     { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
   );
   if (r.status !== 0) return null;
-  const procs = JSON.parse(r.stdout) as { ProcessId: number; ParentProcessId: number; WorkingSetSize: number; CommandLine: string | null }[];
+  type Proc = { ProcessId: number; ParentProcessId: number; WorkingSetSize: number; CommandLine: string | null };
+  let procs: Proc[];
+  try {
+    // Some processes' command lines carry raw control characters, which JSON.parse rejects.
+    // eslint-disable-next-line no-control-regex
+    procs = JSON.parse(r.stdout.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, ' ')) as Proc[];
+  } catch {
+    return null;
+  }
   const tree = new Set([browserPid]);
   for (let grew = true; grew; ) {
     grew = false;
