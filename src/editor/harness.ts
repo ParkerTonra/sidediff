@@ -1,7 +1,7 @@
 // Dev-only test page for the engine: /src/editor/harness.html. Not part of the app.
 import { createDiffEngine, liveModelCount } from './index';
 import type { SideDiffEngine } from './index';
-import { isDiffProviderActive, supersededRuns } from './diff-provider';
+import { cachedDiffs, isDiffProviderActive, supersededRuns } from './diff-provider';
 import { monaco } from './monaco-setup';
 import type { DiffOptions } from '../types';
 
@@ -14,6 +14,7 @@ declare global {
     __log?: string[];
     __providerActive?: () => boolean;
     __supersededRuns?: () => number;
+    __cachedDiffs?: () => number;
     __monacoModified?: () => monaco.editor.ICodeEditor | undefined;
   }
 }
@@ -97,6 +98,7 @@ window.__liveModels = liveModelCount;
 window.__createEngine = createDiffEngine;
 window.__providerActive = isDiffProviderActive;
 window.__supersededRuns = supersededRuns;
+window.__cachedDiffs = cachedDiffs;
 // Test-only: the right-hand editor of the harness diff editor.
 window.__monacoModified = () =>
   monaco.editor.getEditors().find((e) => e.getDomNode()?.classList.contains('modified-in-monaco-diff-editor') && e.getDomNode()?.closest('#editor'));

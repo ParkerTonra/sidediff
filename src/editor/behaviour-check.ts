@@ -607,6 +607,54 @@ async function main(): Promise<void> {
   });
   check('dispose frees every kept model', leak.during > leak.before && leak.after === leak.before, JSON.stringify(leak));
 
+  // --- context-lines change: no worker re-diff, change position kept ---------
+  await settle(() =>
+    page.evaluate(() => {
+      const g = window.__gen!(30_000);
+      window.__engine!.setText('a', g.a);
+      window.__engine!.setText('b', g.b);
+    }),
+  );
+  const ctx = await page.evaluate(async () => {
+    const e = window.__engine!;
+    e.setOptions({ diffOnly: true, contextLines: 3 });
+    await new Promise((r) => setTimeout(r, 300));
+    e.goToChange(5);
+    const hits0 = window.__cachedDiffs!();
+    const sup0 = window.__supersededRuns!();
+    const done = (): Promise<{ computeMs: number }> =>
+      new Promise((r) => {
+        const off = e.on('diff:done', (s) => {
+          off();
+          r(s);
+        });
+      });
+    let d = done();
+    e.setOptions({ contextLines: 7 });
+    e.nextChange(); // navigation while the re-diff is in flight
+    const s1 = await d;
+    await new Promise((r) => setTimeout(r, 100));
+    const after1 = e.getPosition().index;
+    d = done();
+    e.setOptions({ contextLines: 1 }); // lowering re-attaches the models
+    const s2 = await d;
+    await new Promise((r) => setTimeout(r, 100));
+    const after2 = e.getPosition().index;
+    e.setOptions({ diffOnly: false, contextLines: 3 });
+    return {
+      after1,
+      after2,
+      cacheHits: window.__cachedDiffs!() - hits0,
+      superseded: window.__supersededRuns!() - sup0,
+      computeMs: [s1.computeMs, s2.computeMs],
+    };
+  });
+  check(
+    'context-lines change: answered without a worker re-diff, change position kept',
+    ctx.after1 === 6 && ctx.after2 === 6 && ctx.cacheHits >= 2 && ctx.superseded === 0 && ctx.computeMs.every((ms) => ms < 50),
+    JSON.stringify(ctx),
+  );
+
   // --- long changed lines get no character diff (D14) -------------------------
   const proj = await page.evaluate(async () => {
     const get = async (s: string): Promise<string | null> => {

@@ -153,6 +153,8 @@ export function createDiffEngine(): SideDiffEngine {
   let watchdog: ReturnType<typeof setTimeout> | undefined;
   let stats: DiffStats | null = null;
   let finalizeSeq = 0;
+  /** Line ranges of the last applied result, to tell a re-diff with the same hunks. */
+  let hunkSignature = '';
   /** Runs once after the next diff result is shown (re-anchors the viewport). */
   let restoreView: (() => void) | null = null;
 
@@ -323,7 +325,13 @@ export function createDiffEngine(): SideDiffEngine {
       quitEarly: run ? run.quitEarly : (result?.quitEarly ?? false),
     };
     const total = stats.changes;
-    const index = position.index <= total ? position.index : 0;
+    // Same hunks as before (a re-diff after an option change): the current
+    // change keeps its number. Otherwise keep it while it still exists.
+    const signature = changes
+      .map((c) => `${c.originalStartLineNumber},${c.originalEndLineNumber},${c.modifiedStartLineNumber},${c.modifiedEndLineNumber}`)
+      .join(';');
+    const sameHunks = signature === hunkSignature;
+    hunkSignature = signature;
     afterNextFrame(() => {
       if (seq !== finalizeSeq || !stats) return;
       const restore = restoreView;
@@ -332,6 +340,9 @@ export function createDiffEngine(): SideDiffEngine {
       endWait();
       mark('sidediff:diff-done');
       emit('diff:done', stats);
+      // Read the position now, not when the result arrived: navigation in
+      // between (F7 while a re-diff ran) must not be undone by a late result.
+      const index = sameHunks || position.index <= total ? Math.min(position.index, total) : 0;
       setPosition(index, total, true);
     });
   }
@@ -695,14 +706,19 @@ export function createDiffEngine(): SideDiffEngine {
       // extra lines. A fresh view model (detach + reattach) starts clean.
       const contextChanged = clampContextLines(prev.contextLines) !== clampContextLines(options.contextLines);
       const reattach = contextChanged && diffEditor?.getModel() != null;
+      let keepCursor: monaco.Position | null = null;
+      let keepTop = 0;
       if (reattach && diffEditor) {
         // Pixel offsets change with the new layout: re-anchor on the current
         // change (or the top visible line) once the fresh regions exist.
         const ed = diffEditor.getModifiedEditor();
-        const anchorIndex = position.index;
         const anchorLine = ed.getVisibleRanges()[0]?.startLineNumber ?? 1;
         const cursor = ed.getPosition();
+        keepCursor = cursor;
+        keepTop = ed.getScrollTop();
         restoreView = () => {
+          // The current change when the result lands (the user may have moved on meanwhile).
+          const anchorIndex = position.index;
           if (anchorIndex > 0 && anchorIndex <= revealLines.length) {
             reveal(anchorIndex, monaco.editor.ScrollType.Immediate);
           } else {
@@ -717,7 +733,12 @@ export function createDiffEngine(): SideDiffEngine {
       if (diffOnlyChanged) afterNextFrame(() => mark('sidediff:diffonly-done'));
       if (reattach && diffEditor) {
         const s = shown();
+        const ed = diffEditor.getModifiedEditor();
         diffEditor.setModel({ original: s.a, modified: s.b });
+        // Re-attaching resets the cursor to 1:1; navigation during the re-diff
+        // (F7 right after a context change) must continue from where it was.
+        if (keepCursor) ed.setPosition(keepCursor);
+        ed.setScrollTop(keepTop);
         beginWait();
       }
       if (allWsChanged) invalidateDiffs();

@@ -182,6 +182,15 @@ function toMapping(c: SerializedChange): DetailedLineRangeMapping {
 
 const diffWorker = new DiffWorkerClient();
 
+/** The last result, keyed by model versions + options (one entry). */
+let lastResult: { key: string; diff: IDocumentDiff } | null = null;
+let cacheHits = 0;
+
+/** Test hook: diffs answered from the last result instead of the worker. */
+export function cachedDiffs(): number {
+  return cacheHits;
+}
+
 /** Test hook: how many running diffs were abandoned for a newer request. */
 export function supersededRuns(): number {
   return diffWorker.superseded;
@@ -222,15 +231,30 @@ class EngineDiffProvider {
       // Any newer request makes a running one stale: stop it so this request
       // does not queue behind it in the worker.
       diffWorker.supersede();
-      let result = trivialDiff(original, modified);
+      // Monaco re-asks for the same diff when only presentation changes (the
+      // context-lines count, a re-attach for it): answer from the last result.
+      const cacheKey = [
+        sideOf(original).key,
+        sideOf(modified).key,
+        opts.ignoreTrimWhitespace,
+        opts.maxComputationTimeMs,
+        ctl.ignoreAllWhitespace,
+        ctl.lineLevelOnly,
+      ].join('|');
+      let result: IDocumentDiff | null = lastResult?.key === cacheKey ? lastResult.diff : null;
+      const cached = result !== null;
+      if (!result) result = trivialDiff(original, modified);
       if (!result) {
         result = ctl.ignoreAllWhitespace
           ? await computeIgnoringAllWhitespace(original, modified, opts)
           : await diffWorker.compute(sideOf(original), sideOf(modified), opts);
       }
-      if (ctl.lineLevelOnly) {
+      if (ctl.lineLevelOnly && !cached) {
         result = { ...result, changes: result.changes.map((c) => new DetailedLineRangeMapping(c.original, c.modified, undefined)) };
       }
+      // Approximate results too: the same request gets the same time budget.
+      lastResult = { key: cacheKey, diff: result };
+      cacheHits += cached ? 1 : 0;
       ctl.onRunEnd({
         ms: performance.now() - t0,
         quitEarly: result.quitEarly,
