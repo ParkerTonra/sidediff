@@ -624,7 +624,7 @@ async function startApp({ root, engine, registry, project, views, history }: App
       const link = h('button', {
         type: 'button', class: 'related-link', 'data-id': x.id,
         title: `${x.element}: ${x.detail}`, 'aria-label': `${x.name}, ${x.detail}: ${statusWord(x.status, settings.labels)}`,
-      }, glyph(x.status), x.element === 'Page' ? 'Page' : x.name);
+      }, glyph(x.status), h('span', { class: 'related-name' }, x.element === 'Page' ? 'Page' : x.name));
       link.addEventListener('click', () => {
         void openItem(x);
         if (!explorer.drawer.hidden) explorer.reveal(x.id);

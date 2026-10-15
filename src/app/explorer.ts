@@ -370,7 +370,15 @@ export function createExplorer(host: ExplorerHost): Explorer {
     else if (row.item && host.open) host.open(row.item);
   }
 
+  // Focus from a mouse press must not move or scroll the list: the scroll would land the
+  // mouseup on another row and the click would never reach the row that was pressed.
+  let pointerFocus = false;
+  list.addEventListener('pointerdown', () => {
+    pointerFocus = true;
+    setTimeout(() => (pointerFocus = false), 0);
+  });
   list.addEventListener('focus', () => {
+    if (pointerFocus) return;
     if (cursor < 0 || !rows[cursor]?.shown) {
       const active = activeId ? itemRows.get(activeId) : undefined;
       const i = active?.shown ? rows.indexOf(active) : visibleIndices()[0] ?? -1;
