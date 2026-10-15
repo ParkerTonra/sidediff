@@ -16,6 +16,8 @@ Everything runs in the browser. There is no server, no account, no telemetry. Th
 - Languages: C#, XML, Plain Text, auto-detected on paste (XML if the first non-blank character is `<`, C# if the text starts with `using` or `namespace`). Override with the picker.
 - Dark theme by default, light theme toggle. Settings (labels, language, theme, options, context lines, font size) persist in `localStorage`. Pane text is not persisted.
 - Swap A/B, clear, copy, load a file (picker or drag-and-drop; read locally as text).
+- **Acumatica project explorer**: load two `project.xml` exports and browse every item (code, screens, DACs, tables, SQL, site map, …, plus **Other**), see what one side is missing or changed, and open any item as its own diff. `Ctrl+P` jumps to an item by name. See [Project explorer](#project-explorer-acumatica-projectxml).
+- `Ctrl+Z` / `Ctrl+Y` also undo paste-replace, Clear, file load and Swap.
 - Degrades gracefully above 400,000 lines or 40 MB per side: warns, turns off intra-line highlighting and keeps going.
 
 ## Setup (Windows)
@@ -67,6 +69,34 @@ It also works from a sub-folder of a web server. Monaco's worker is loaded from 
 
 Shortcuts are listed in [docs/SHORTCUTS.md](docs/SHORTCUTS.md) and in the app under `?`.
 
+## Project explorer (Acumatica `project.xml`)
+
+When either side is an Acumatica customization export (the root element is `<Customization>`), SideDiff indexes it in a background worker and shows a **project explorer** drawer on the left. Nothing extra appears for other text. Everything is local; nothing is uploaded.
+
+**What it shows.** Every direct child of `<Customization>` is one item, grouped as Code (graph extensions, new graphs, DAC customizations, code files), Screens (pages and screen customizations, editor metadata), Tables, SQL, Reports, Generic inquiries, Site map, Integration (endpoints, scenarios, webhooks, business events) and Files. Anything unrecognized is listed under **Other**, so nothing is hidden. Items are matched between the two sides by identity (class name, screen id, table name and so on), not by position, so a moved element is not a change.
+
+**Statuses.** Each row has a glyph as well as a colour, so status never depends on colour alone:
+
+| Glyph | Meaning |
+|---|---|
+| `~` | modified |
+| `≈` | whitespace only (equal after trimming each line) |
+| `−` | only in A |
+| `+` | only in B |
+| `=` | same (dimmed) |
+
+The drawer defaults to the **Changed** chip (everything except same); **All**, **Only A** and **Only B** show the rest. The filter box does fuzzy matching on name and detail, groups collapse, and the header warns when the two `product-version` values differ. Width, open state and filter persist.
+
+**Item views.** Click a row (or press `Enter`) to diff just that item. A breadcrumb bar replaces the whole-project view: `← Project` (also `Alt+Left` or `Esc`), the group and item name, a **Code | XML** switch, **Show in project**, **Related**, and `‹ ›` for the previous/next item in the current filter. The Code view shows the item's C# (or the decoded page source, field list or pretty-printed JSON) with the language's highlighting; XML shows the element exactly as exported. Diff only, change navigation and the whitespace options work in an item view. An item missing on one side shows "Not in <label>" next to the other side's content. Item views are read-only; `Back` returns to the project with the explorer scroll position intact.
+
+**Related** lists the other items with the same screen id: the page, its `.aspx`/`.cs` files, Modern UI files, the site map entry and editor fields, so one screen's pieces are one click apart.
+
+**Files are references.** `File` and `PerTenantFile` elements in a real export do not contain the file contents: those live in the package zip, not in `project.xml`. SideDiff therefore shows them as references (path, and the XML of the element) and compares the element. It can only show their code when an export embeds a `Content` section.
+
+**Quick open.** `Ctrl+P` fuzzy-searches every item regardless of the filter, even with the drawer closed.
+
+**Undo for whole-text changes.** `Ctrl+Z` / `Ctrl+Y` undo and redo paste-replace, Clear, file load and drop, and Swap (one step for both sides). Typing still uses the editor's own undo first. The last 10 replacements (up to 300 MB of text) are kept, and a toast says what was undone.
+
 ## Adding a language pack
 
 Bundled languages (`csharp`, `xml`, `plaintext`) need no network. Every other language is a *data-only* TextMate grammar (`.tmLanguage.json`) listed in `languages/manifest.json`. The app never downloads or runs JavaScript: grammars are tokenized by `vscode-textmate` with the `vscode-oniguruma` WASM that ships with the app (decision D5).
@@ -99,28 +129,31 @@ Install pipeline: fetch (no credentials, no redirects, 30 s timeout) -> under 2 
 
 SideDiff uses Monaco Editor's `DiffEditor` (`monaco-editor` 0.57, pinned). It computes the diff in a web worker, has a built-in `hideUnchangedRegions` (the "diff only" feature), intra-line highlighting, side-by-side and inline modes, change navigation and `vs`/`vs-dark` themes, and ships Monarch tokenizers for C# and XML. Only the editor API plus the C# and XML registrations are imported (never the `monaco-editor` barrel), which keeps the bundle to those two language chunks.
 
-The fallback, if Monaco had missed the performance gate, was CodeMirror 6 with `@codemirror/merge`. Outcome: Monaco passes every gate with a wide margin, so the fallback was not needed. The engine owns Monaco's diff provider (D6), implements "ignore all whitespace" with hidden whitespace-stripped shadow models so the visible text never changes (D7), and uses a 10 s diff budget (30 s when degraded), after which Monaco returns an approximate result and the stats bar says so (D8). Diffs run Monaco's own diff algorithm in a dedicated worker that the engine restarts whenever newer text or options arrive, so a stale run never delays the current one (D11).
+The fallback, if Monaco had missed the performance gate, was CodeMirror 6 with `@codemirror/merge`. Outcome: Monaco passes every gate with a wide margin, so the fallback was not needed. The engine owns Monaco's diff provider (D6), implements "ignore all whitespace" with hidden whitespace-stripped shadow models so the visible text never changes (D7), and uses a 10 s diff budget (30 s when degraded), after which Monaco returns an approximate result and the stats bar says so (D8). Diffs run Monaco's own diff algorithm in a dedicated worker that the engine restarts whenever newer text or options arrive, so a stale run never delays the current one (D11). Lines over 1,000 characters (such as an exported page's encoded source) are compared as whole lines without character-level refinement, which keeps real project exports fast (D14).
 
 ## Performance gate
 
-Measured by `pnpm bench` in headless Chromium on the 150k-line `large` pair (8.7 MB), loaded through the real file inputs. Run recorded in `bench-results/` on 2026-10-14; all PASS.
+Measured by `pnpm bench` in headless Chromium on the 150k-line `large` pair (8.7 MB), loaded through the real file inputs. Run recorded in `bench-results/` on 2026-10-15; all PASS.
 
 | Check | Limit | Measured |
 |---|---|---|
-| One 150k-line side to first render | < 2 s | 123 ms (A), 139 ms (B) |
-| Diff ready, both sides | target < 5 s, hard < 10 s | 0.80 s |
-| Longest main-thread block during diff | <= 200 ms | 52 ms |
-| Toggle "diff only" on / off | < 1 s | 315 / 90 ms |
+| One 150k-line side to first render | < 2 s | 139 ms (A), 138 ms (B) |
+| Diff ready, both sides | target < 5 s, hard < 10 s | 0.84 s |
+| Longest main-thread block during diff | <= 200 ms | 50 ms |
+| Toggle "diff only" on / off | < 1 s | 399 / 108 ms |
 | Worst frame in a 5 s scripted scroll | <= 100 ms | 17 ms |
-| Tab memory after diff | < 2 GB | 408 MB renderer, 48 MB JS heap |
-| `stress` pair (500k lines) | no crash, warning shown, finishes or reports within 60 s | done in 2.9 s, degraded warning shown |
-| Initial JS, gzipped | < 3 MB (warning only) | 0.79 MB; lazy chunks: csharp, xml only |
+| Tab memory after diff | < 2 GB | 543 MB renderer, 66 MB JS heap |
+| `stress` pair (500k lines) | no crash, warning shown, finishes or reports within 60 s | done in 3.1 s, degraded warning shown |
+| Initial JS, gzipped | < 3 MB (warning only) | 0.80 MB; lazy chunks: csharp, xml only |
+| Project explorer ready after load (large pair, 1,873 items) | < 1.5 s | 876 ms |
+| Longest main-thread task while indexing | < 50 ms | 0 ms |
+| Full diff of the 1 MB project pair (20k-char changed lines) | < 1 s, exact | 216 ms |
 
 Two unrelated 150k-line files (every line differs) hit the diff budget and return an approximate result after about 10 s.
 
 ## Project docs
 
-- [docs/DECISIONS.md](docs/DECISIONS.md): every deviation and choice (D1-D10), including why there is no single-file build (D10)
+- [docs/DECISIONS.md](docs/DECISIONS.md): every deviation and choice (D1-D15): no single-file build (D10), cancellable diff worker (D11), explorer design (D12), whole-text undo (D13), long-line diffing (D14)
 - [docs/INTERFACES.md](docs/INTERFACES.md): the contracts between the editor, UI and language layers
 - [docs/STATUS.md](docs/STATUS.md): per-area status and measured numbers
 - [docs/REVIEW.md](docs/REVIEW.md): review findings
