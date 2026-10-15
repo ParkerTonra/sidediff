@@ -13,6 +13,8 @@ Everything runs in the browser. There is no server, no account, no telemetry. Th
 - Options: ignore leading/trailing whitespace (default on), ignore all whitespace, word wrap, minimap, font size.
 - Languages: C#, XML, Plain Text, auto-detected on paste (XML if the first non-blank character is `<`, C# if the text starts with `using` or `namespace`). Override with the picker.
 - Dark theme by default, light theme toggle. Settings (labels, language, theme, options, context lines, font size) persist in `localStorage`. Pane text is not persisted.
+- Project explorer for Acumatica exports: every item, what is missing on one side, one-click focused diffs per item.
+- Undo/redo of pastes, clears, loads and swaps.
 - Swap A/B, clear, copy, load a file (picker or drag-and-drop; read locally as text).
 - Degrades gracefully above 400,000 lines or 40 MB per side: warns, turns off intra-line highlighting and keeps going.
 
@@ -64,6 +66,34 @@ It also works from a sub-folder of a web server. Monaco's worker is loaded from 
 5. Toggle whitespace options, wrap, inline view, theme and font size as needed.
 
 Shortcuts are listed in [SHORTCUTS.md](SHORTCUTS.md) and in the app under `?`.
+
+## Project explorer (Acumatica `project.xml`)
+
+When either side is an Acumatica customization export (the root element is `<Customization>`), SideDiff indexes it in a background worker and shows a **project explorer** drawer on the left. Nothing extra appears for other text. Everything is local; nothing is uploaded.
+
+**What it shows.** Every direct child of `<Customization>` is one item, grouped as Code (graph extensions, new graphs, DAC customizations, code files), Screens (pages and screen customizations, editor metadata), Tables, SQL, Reports, Generic inquiries, Site map, Integration (endpoints, scenarios, webhooks, business events) and Files. Anything unrecognized is listed under **Other**, so nothing is hidden. Items are matched between the two sides by identity (class name, screen id, table name and so on), not by position, so a moved element is not a change.
+
+**Statuses.** Each row has a glyph as well as a colour, so status never depends on colour alone:
+
+| Glyph | Meaning |
+|---|---|
+| `~` | modified |
+| `≈` | whitespace only (equal after trimming each line) |
+| `−` | only in A |
+| `+` | only in B |
+| `=` | same (dimmed) |
+
+The drawer defaults to the **Changed** chip (everything except same); **All**, **Only A** and **Only B** show the rest. The filter box does fuzzy matching on name and detail, groups collapse, and the header warns when the two `product-version` values differ. Width, open state and filter persist.
+
+**Item views.** Click a row (or press `Enter`) to diff just that item. A breadcrumb bar replaces the whole-project view: `← Project` (also `Alt+Left` or `Esc`), the group and item name, a **Code | XML** switch, **Show in project**, **Related**, and `‹ ›` for the previous/next item in the current filter. The Code view shows the item's C# (or the decoded page source, field list or pretty-printed JSON) with the language's highlighting; XML shows the element exactly as exported. Diff only, change navigation and the whitespace options work in an item view. An item missing on one side shows "Not in <label>" next to the other side's content. Item views are read-only; `Back` returns to the project with the explorer scroll position intact.
+
+**Related** lists the other items with the same screen id: the page, its `.aspx`/`.cs` files, Modern UI files, the site map entry and editor fields, so one screen's pieces are one click apart.
+
+**Files are references.** `File` and `PerTenantFile` elements in a real export do not contain the file contents: those live in the package zip, not in `project.xml`. SideDiff therefore shows them as references (path, and the XML of the element) and compares the element. It can only show their code when an export embeds a `Content` section.
+
+**Quick open.** `Ctrl+P` fuzzy-searches every item regardless of the filter, even with the drawer closed.
+
+**Undo for whole-text changes.** `Ctrl+Z` / `Ctrl+Y` undo and redo paste-replace, Clear, file load and drop, and Swap (one step for both sides). Typing still uses the editor's own undo first. The last 10 replacements (up to 300 MB of text) are kept, and a toast says what was undone.
 
 ## Adding a language pack
 

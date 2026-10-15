@@ -2,7 +2,45 @@
 
 Checklist of findings grouped by owner. `[ ]` open, `[x]` resolved. Reviewer: sections 3, 8, 9 of `GOAL-PROMPT.md` and `docs/INTERFACES.md`. Each pass says what was **run** and what was only **read**.
 
-## Pass 2 (HEAD 2d98056: engine, app shell, registry, bench and e2e landed)
+## Pass 3 (HEAD 9de3e3d: project explorer, item views, whole-text undo)
+
+Legend: **R** = I ran it (Playwright; dev server on 5317 and a production build served by `vite preview` from a temp dir), **r** = read only. Test data: `fixtures/project-a.xml` / `project-b.xml`, `large-*.xml`, `csharp-large-*.cs`. I did not open any real export.
+
+### Verdict
+The explorer and undo meet acceptance 1 to 7 as far as I could check. No blockers. Three low accessibility items for the UI (announcements for screen readers) and nothing for Editor, Languages or QA.
+
+### Passes
+- **R Network.** Cold load of `/`: zero non-localhost requests (dev and production). After loading the project pair (indexing runs): still zero. Workers are same-origin (`project.worker`, `diff.worker`, `editor.worker`). The `Page` item opened (base64 raw-deflate decoded with `DecompressionStream`) with no console error, so the CSP needs nothing more. CSP unchanged: `script-src 'self' 'wasm-unsafe-eval'`, `connect-src 'self' https://cdn.jsdelivr.net`, `worker-src 'self' blob:`.
+- **R Bundle** (`vite build` to temp): initial JS 3,097 KB raw / 789 KB gzip (3 MB warning limit). Lazy: `csharp` 1.7 KB gz, `xml` 0.7 KB, `monaco-bundled` 0.3 KB, `monaco-bridge` 25 KB, `onig.wasm` 162 KB, workers `editor` 93 KB, `diff` 34 KB, `project` 5.8 KB. Only csharp and xml language modules; no other `languages/definitions` registrations.
+- **R Acceptance 1 and 2.** Fixture pair: drawer shows `174 items, 39 changed`, groups Code, Screens, Tables, SQL and others with per-status counts, "Versions differ A 24.212 to B 25.201" header. An only-in-A code file opens with A's C# and "Not in B" on the right.
+- **R Acceptance 3.** Enter on a row opens the item; crumb reads `Project / Code / only in A / name / path / C# | XML / Show in project / prev 2 / 39 next`. Alt+Left and Esc both return; the tree cursor and focus survive Back. Page item (ASPX view) opens.
+- **R Acceptance 4.** Ctrl+P: focus lands in the input, typing `po` gives 60 results, Down moves `aria-activedescendant`, Enter opens the item.
+- **R Acceptance 5 (large pair, sha256 compare).** Clear B then Ctrl+Z restores B identical; Ctrl+Y clears again. Swap then Ctrl+Z undoes both text and labels in one step. A file load over B undoes. Typing `zzz` then Ctrl+Z restores B (Monaco stack first).
+- **R Acceptance 6.** Large pair (1,873 items, 767 changed): explorer appears 961 ms after setting both files, one long task of 57 ms in the whole run.
+- **R Acceptance 7.** C# pair: no drawer, no explorer button, no breadcrumb.
+- **R Robustness / injection.** A class name of `"><img src=x onerror=alert(1)>` renders as text (no injected node, no dialog); a truncated project shows "Could not fully scan A: ... Showing the items found so far." and lists the items found; project vs plain text, empty root and CRLF without an XML header do not throw (no console errors).
+- **R Keyboard.** Tab order: explorer toggle, toolbar, `?`, filter, four chips, then the tree (a single tab stop using `aria-activedescendant`). Down/Up, Home/End, Left (collapses the group), Right, type-ahead (a letter jumps to the filter and is typed), Enter opens. Focus stays in the tree after opening an item and after Back, so keyboard flow is not interrupted.
+- **R Contrast, both themes (WCAG 4.5:1 text).** Status glyphs: dark modified 8.9, whitespace 5.9, only-A 6.2, only-B 7.7, same 6.4; light 5.3, 5.7, 6.0, 4.6, 6.0. Detail text, group totals and dimmed "same" names 6.0 to 6.4. Chips 7.0 / 6.3. Toast 13.1 / 16.5. Every status also has a distinct glyph shape (`~ = - +`) and the row's accessible name spells the status out, so colour is never the only cue. Control borders now meet 3:1: dark `#858585` is 3.2 to 4.2 on its backgrounds, light `#7a7a7a` is 3.4 to 4.3.
+- **R Re-check of earlier fixes.**
+  - `b6c50ff` pane button names (`Copy all of side A: <label>`, contain the visible word) and `Prev change` label: OK in the source; border contrast OK (above).
+  - `af1d529` keyboard trap: after Ctrl+M, Tab leaves the editor (A to B to the toolbar) and Shift+Tab walks back; Tab without Ctrl+M still inserts spaces, as in any code editor. OK, with the documented Ctrl+M.
+  - `52254c8` (word wrap on side A after inline view) and `6eb9dc6` (dedicated diff worker cancels superseded runs): reviewed the diffs and exercised them indirectly (diff worker loads same-origin; large pair diff, option changes and item views run with no console errors). I did not write a specific repro for the wrap-after-inline case.
+- **r Code hygiene.** `rg "as any|@ts-ignore|eslint-disable"` in `src/` found none; no `innerHTML` (the DOM helper builds text nodes and attributes). `fetch` only in the pack install and the same-origin wasm load.
+
+### Findings
+
+**UI / UX (`src/app/index.ts`)**
+- [ ] **Low, a11y.** Opening an item or going Back gives a screen reader no announcement: focus deliberately stays in the tree and nothing live changes (the breadcrumb is not a live region). Fix: write a short message into an existing polite live region on open and Back (for example "Opened APInvoiceRoute2.cs, only in A. Press Alt+Left to go back." / "Back to project"), keeping focus where it is.
+- [ ] **Low, a11y (needs a screen reader to confirm; I only read the code).** The toast (`index.ts:240-243`, `438-443`), the degraded banner, `itemLoading` and the install message are `role=status` elements toggled with the `hidden` attribute, and their text is set in the same tick that they are un-hidden. Many screen readers do not announce a live region that appears already populated. Fix: keep the element in the DOM at all times (`visually-hidden` when empty), and set `textContent` after it is rendered.
+- [ ] **Low, a11y.** The breadcrumb `<nav aria-label="Item view">` (`index.ts:226`) has the same label as the Code/XML group inside it (`index.ts:220`). Rename the nav to "Item breadcrumb" and set `aria-current="page"` on the item name.
+
+**Editor / Languages / QA / Lead**
+- No findings.
+
+### Not verified in pass 3
+Screen-reader output (names and roles read from the DOM only); the user's real export (not opened, by instruction); the 11th-replacement history cap and the 300 MB limit; undo while an item view is open; a repro for `52254c8`; `pnpm bench` and `pnpm e2e` (taken from the Lead's and QA's reports in STATUS.md).
+
+## Pass 2 (history) (HEAD 2d98056: engine, app shell, registry, bench and e2e landed)
 
 Legend: **R** = I ran it, **r** = I only read it or took it from another agent's report.
 
