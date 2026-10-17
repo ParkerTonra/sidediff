@@ -200,7 +200,7 @@ export interface ItemViewKind {
 }
 
 export interface ProjectItemSide {
-  /** 1-based inclusive line range of the element in the full text. */
+  /** 1-based inclusive line range of the element in the full text; 0/0 for a package file not referenced in project.xml (Zip:<path> items). */
   startLine: number;
   endLine: number;
 }
@@ -219,7 +219,7 @@ export interface ProjectItem {
   screenId?: string;
   /** Status of the default (first) view. */
   status: ItemStatus;
-  /** First entry is the default view. Always includes 'xml'. */
+  /** First entry is the default view. Items from project.xml always include 'xml'; Zip:<path> items have none. A 'summary' view, when structured, comes first. */
   views: ItemViewKind[];
   a: ProjectItemSide | null;
   b: ProjectItemSide | null;

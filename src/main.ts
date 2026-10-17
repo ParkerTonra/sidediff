@@ -2,6 +2,7 @@
 import { createDiffEngine } from './editor';
 import { createLanguageRegistry } from './languages';
 import { createProjectIndexer } from './project';
+import { createPackageReader } from './package';
 import { createApp } from './app';
 
 const root = document.getElementById('app');
@@ -10,10 +11,11 @@ if (!root) throw new Error('#app missing');
 try {
   const engine = createDiffEngine();
   const registry = createLanguageRegistry();
-  // JSON views (EditorUpdatedFields) use the json pack once it is installed.
+  // JSON and SQL views use their packs once installed.
   const project = createProjectIndexer({ languageAvailable: (id) => registry.get(id)?.installed === true });
+  const packages = createPackageReader();
   window.__sidediff = { engine, registry, project };
-  createApp({ root, engine, registry, project, views: engine, history: engine });
+  createApp({ root, engine, registry, project, packages, views: engine, history: engine });
 } catch (err) {
   root.textContent = `SideDiff failed to start: ${err instanceof Error ? err.message : String(err)}`;
   console.error(err);
