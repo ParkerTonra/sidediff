@@ -185,7 +185,7 @@ function typesFor(variant: number): AsmType[] {
   return types;
 }
 
-export function createFakeAssemblyBrowser(opts: { loadDelayMs?: number } = {}): AssemblyBrowser & { decompileCalls: number } {
+export function createFakeAssemblyBrowser(opts: { loadDelayMs?: number; allDelayMs?: number } = {}): AssemblyBrowser & { decompileCalls: number } {
   const loaded = new Map<string, AssemblyInfo>();
   let ready = false;
   const strings = ['Carrier is required.', 'Route {0} not found', 'SO301000', 'Assign Carrier'];
@@ -222,6 +222,8 @@ export function createFakeAssemblyBrowser(opts: { loadDelayMs?: number } = {}): 
         await new Promise((r) => setTimeout(r, opts.loadDelayMs ?? 1200));
         ready = true;
       }
+      // Whole assemblies are slow for real (a 793-type DLL took ~17 s): simulate a few seconds.
+      if (typeFullName === null) await new Promise((r) => setTimeout(r, opts.allDelayMs ?? 3500));
       const info = loaded.get(key);
       if (!info) throw new Error(`${key} is not loaded`);
       const types = typeFullName ? info.types.filter((t) => t.fullName === typeFullName) : info.types;

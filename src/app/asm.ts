@@ -68,11 +68,12 @@ export function createAssemblyView(o: AsmViewOptions): Rendered {
   const header = h('div', { class: 'asm-head' });
   const search = h('input', { type: 'search', class: 'ex-filter asm-search', 'data-testid': 'asm-search', placeholder: 'Search types, members and strings…', 'aria-label': 'Search this assembly', spellcheck: 'false', autocomplete: 'off' });
   const btnOutline = h('button', { type: 'button', class: 'btn small', 'data-testid': 'btn-asm-outline', title: 'Diff the type and member outline of both versions', hidden: !compare }, 'Compare outlines');
-  const btnAll = h('button', { type: 'button', class: 'btn small', 'data-testid': 'btn-decompile-all', title: 'Decompile the whole assembly to C#' }, 'Decompile all');
+  const btnAll = h('button', { type: 'button', class: 'btn small', 'data-testid': 'btn-decompile-all', title: 'Decompile the whole assembly to C# (large assemblies take a while)' }, 'Decompile all');
+  const allHint = h('span', { class: 'asm-hint muted' }, 'Whole assembly can take many seconds; a single type takes well under a second.');
   const tree = h('div', { class: 'asm-tree', role: 'tree', 'aria-label': 'Namespaces and types', tabindex: 0 });
   const detail = h('div', { class: 'asm-detail', 'data-testid': 'asm-detail' }, h('p', { class: 'muted' }, 'Pick a type on the left.'));
   const el = h('div', { class: 'rendered asm-view', 'data-testid': 'assembly-view' },
-    header, h('div', { class: 'asm-tools' }, search, btnOutline, btnAll), status,
+    header, h('div', { class: 'asm-tools' }, search, btnOutline, btnAll, allHint), status,
     h('div', { class: 'asm-body' }, tree, detail));
 
   const typesBy = (side: Side): Map<string, AsmType> => new Map((info[side]?.types ?? []).map((t) => [t.fullName, t]));
@@ -133,8 +134,8 @@ export function createAssemblyView(o: AsmViewOptions): Rendered {
     const tb = compare ? typesBy('b').get(fullName) : undefined;
     const t = (ta ?? tb) as AsmType | undefined;
     if (!t) return;
-    const decompile = h('button', { type: 'button', class: 'btn', 'data-testid': 'btn-decompile', title: 'Decompile this type to C# (read-only)' }, 'Decompile');
-    decompile.addEventListener('click', () => void decompileType(fullName));
+    const decompile = h('button', { type: 'button', class: 'btn', 'data-testid': 'btn-decompile', title: 'Decompile this type to C# (read-only)', disabled: busy !== null }, 'Decompile');
+    decompile.addEventListener('click', () => void decompileType(fullName, decompile));
     const parts: (HTMLElement | null)[] = [
       h('div', { class: 'asm-type-head' }, h('h3', {}, t.name), roleBadge(t), h('span', { class: 'spacer' }), decompile),
       h('dl', { class: 'bin-facts' },
@@ -153,30 +154,72 @@ export function createAssemblyView(o: AsmViewOptions): Rendered {
     if (member) detail.querySelector(`[data-member="${CSS.escape(member)}"]`)?.scrollIntoView({ block: 'center' });
   }
 
-  async function withDecompiler<T>(work: () => Promise<T>): Promise<T | null> {
-    if (!o.browser.decompilerReady()) {
-      status.textContent = 'Loading decompiler… (first use only, runs in your browser)';
-      o.announce('Loading decompiler');
-    }
+  // ---------- decompiling: runs in a worker, so a ticking timer here stays smooth ----------
+  let busy: { what: string; t0: number; timer: ReturnType<typeof setInterval>; button: HTMLButtonElement | null; label: string } | null = null;
+  let decompileSeq = 0;
+
+  function renderBusy(): void {
+    const on = busy !== null;
+    btnAll.disabled = on;
+    detail.querySelectorAll<HTMLButtonElement>('[data-testid="btn-decompile"]').forEach((b) => (b.disabled = on));
+    el.toggleAttribute('aria-busy', on);
+    if (!busy) return;
+    const secs = Math.floor((performance.now() - busy.t0) / 1000);
+    const text = o.browser.decompilerReady()
+      ? `Decompiling ${busy.what}… ${secs} s`
+      : `Loading decompiler… (first use only, runs in your browser), then ${busy.what} · ${secs} s`;
+    status.replaceChildren(h('span', { class: 'spinner', 'aria-hidden': 'true' }), ` ${text}`);
+    if (busy.button) busy.button.textContent = `Decompiling… ${secs} s`;
+  }
+
+  function startBusy(what: string, button: HTMLButtonElement | null): void {
+    stopBusy();
+    busy = { what, t0: performance.now(), timer: setInterval(renderBusy, 1000), button, label: button?.textContent ?? '' };
+    renderBusy();
+    o.announce(o.browser.decompilerReady() ? `Decompiling ${what}` : `Loading decompiler, then decompiling ${what}`);
+  }
+
+  function stopBusy(): void {
+    if (!busy) return;
+    clearInterval(busy.timer);
+    if (busy.button) busy.button.textContent = busy.label;
+    busy = null;
+    status.textContent = '';
+    renderBusy();
+  }
+
+  /** Runs one decompile request; a newer request (or closing the view) makes this one's result stale. */
+  async function runDecompile(what: string, button: HTMLButtonElement | null, work: () => Promise<(string | null)[]>): Promise<(string | null)[] | null> {
+    const seq = ++decompileSeq;
+    startBusy(what, button);
+    const t0 = performance.now();
     try {
       const r = await work();
-      status.textContent = '';
+      if (seq !== decompileSeq || disposed) return null;
+      stopBusy();
+      const secs = (performance.now() - t0) / 1000;
+      if (secs >= 2) o.announce(`Decompiled ${what} in ${secs.toFixed(1)} s`);
       return r;
     } catch (err) {
+      if (seq !== decompileSeq || disposed) return null;
+      stopBusy();
       status.textContent = `Decompiler unavailable: ${err instanceof Error ? err.message : String(err)}. IL is still available per method.`;
       o.announce(status.textContent);
       return null;
     }
   }
 
-  async function decompileType(fullName: string): Promise<void> {
-    const r = await withDecompiler(() => Promise.all(sides.map((s) => (typesBy(s).has(fullName) ? o.browser.decompile(keyOf(s), fullName) : Promise.resolve(null)))));
-    if (r && !disposed) o.showCode(`Decompiled ${fullName}`, r[0] ?? null, compare ? (r[1] ?? null) : null, 'csharp');
+  async function decompileType(fullName: string, button: HTMLButtonElement | null): Promise<void> {
+    if (busy) return;
+    const name = fullName.split('.').pop() ?? fullName;
+    const r = await runDecompile(name, button, () => Promise.all(sides.map((s) => (typesBy(s).has(fullName) ? o.browser.decompile(keyOf(s), fullName) : Promise.resolve(null)))));
+    if (r) o.showCode(`Decompiled ${fullName}`, r[0] ?? null, compare ? (r[1] ?? null) : null, 'csharp');
   }
 
   async function decompileAll(): Promise<void> {
-    const r = await withDecompiler(() => Promise.all(sides.map((s) => (info[s] ? o.browser.decompile(keyOf(s), null) : Promise.resolve(null)))));
-    if (r && !disposed) o.showCode(`Decompiled ${o.name}`, r[0] ?? null, compare ? (r[1] ?? null) : null, 'csharp');
+    if (busy) return;
+    const r = await runDecompile(o.name, btnAll, () => Promise.all(sides.map((s) => (info[s] ? o.browser.decompile(keyOf(s), null) : Promise.resolve(null)))));
+    if (r) o.showCode(`Decompiled ${o.name}`, r[0] ?? null, compare ? (r[1] ?? null) : null, 'csharp');
   }
 
   async function showIl(side: Side, t: AsmType, token: number, name: string): Promise<void> {
@@ -249,5 +292,12 @@ export function createAssemblyView(o: AsmViewOptions): Rendered {
     if (first) select(first.fullName);
   })();
 
-  return { el, dispose: () => { disposed = true; } };
+  return {
+    el,
+    dispose: () => {
+      disposed = true;
+      decompileSeq++;
+      stopBusy();
+    },
+  };
 }

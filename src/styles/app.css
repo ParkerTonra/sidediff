@@ -1436,6 +1436,17 @@ kbd {
   max-width: 420px;
 }
 
+.asm-hint {
+  font-size: 12px;
+}
+
+.asm-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
 .asm-status:empty {
   display: none;
 }
