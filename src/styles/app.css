@@ -1368,6 +1368,10 @@ kbd {
   border-color: var(--accent);
 }
 
+.ov-group.is-diff {
+  border-color: var(--modified);
+}
+
 .ov-n {
   font-weight: 700;
   font-variant-numeric: tabular-nums;

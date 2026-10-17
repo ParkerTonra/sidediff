@@ -203,8 +203,9 @@ export function renderOverview(ov: Record<Side, PackageOverview | null>, mode: A
   groups.sort((x, y) => order.indexOf(x) - order.indexOf(y));
   const counts = h('div', { class: 'ov-groups', role: 'list' }, ...groups.map((g) => {
     const n = sides.map((s) => ov[s]?.counts[g] ?? 0);
-    const btn = h('button', { type: 'button', class: 'ov-group', role: 'listitem', 'data-group': g, title: `Show ${GROUP_LABELS[g]} in the explorer` },
-      h('span', { class: 'ov-n' }, compare ? `${fmt(n[0] ?? 0)} / ${fmt(n[1] ?? 0)}` : fmt(n[0] ?? 0)), h('span', {}, GROUP_LABELS[g]));
+    const differs = compare && n[0] !== n[1];
+    const btn = h('button', { type: 'button', class: `ov-group${differs ? ' is-diff' : ''}`, role: 'listitem', 'data-group': g, title: `Show ${GROUP_LABELS[g]} in the explorer${differs ? ' (counts differ)' : ''}` },
+      differs ? glyph('modified') : '', h('span', { class: 'ov-n' }, compare ? `${fmt(n[0] ?? 0)} / ${fmt(n[1] ?? 0)}` : fmt(n[0] ?? 0)), h('span', {}, GROUP_LABELS[g]));
     btn.addEventListener('click', () => on.group(g));
     return btn;
   }));
