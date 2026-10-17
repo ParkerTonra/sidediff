@@ -427,6 +427,12 @@ describe('summaries', () => {
     expect(page?.sections).toHaveLength(2);
     const html = await ix.viewSummary?.('PerTenantFile:screens\\DM\\DM301000\\DM301000.html', 'a');
     expect(html?.sections[0]?.heading).toBe('qp-fieldset fs1 · Document');
+    expect(html?.facts.slice(0, 2)).toEqual([
+      ['Screen', 'DM301000'],
+      ['Title', 'Widgets'],
+    ]);
+    const aspxFile = await ix.viewSummary?.('File:Pages\\DM\\DM301000.aspx', 'a');
+    expect(aspxFile?.facts[0]).toEqual(['Screen', 'DM301000']);
     const esc = await ix.viewSummary?.('Zip:App_Data/SnapshotConfigs/demo.esc', 'a');
     expect(esc?.facts).toContainEqual(['In project.xml', 'no']);
     expect(await ix.viewSummary?.('nope', 'a')).toBeNull();

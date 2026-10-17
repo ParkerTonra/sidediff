@@ -48,6 +48,19 @@ async function codeText(state: SearchState, side: Side, s: SideSlice): Promise<s
   return codeTextSync(state.texts[side], src);
 }
 
+/**
+ * Decodes every pageSource and reads every package text file into the cache,
+ * so the first search doesn't pay for it. Run right after indexing.
+ */
+export async function warmSearchCache(state: SearchState): Promise<void> {
+  for (const item of state.index.items) {
+    for (const side of ['a', 'b'] as const) {
+      const s = item.slices[side];
+      if (s?.code && (s.code.kind === 'deflate' || s.code.kind === 'file')) await codeText(state, side, s);
+    }
+  }
+}
+
 /** CDATA body ranges (absolute offsets) that the code view already covers. */
 function coveredRanges(s: SideSlice): number[] {
   const src = s.code;

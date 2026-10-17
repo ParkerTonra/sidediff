@@ -247,7 +247,9 @@ function htmlOutline(tree: Node): { facts: [string, string][]; sections: Summary
 }
 
 function pageSummary(title: string, source: string, titles: ReadonlyMap<string, string> | undefined, el: Node | undefined): ItemSummary {
-  const screen = el?.attrs.path ? (/([a-z]{2}\d{6})\.(aspx|html)$/i.exec(el.attrs.path)?.[1]?.toUpperCase() ?? '') : (/^[A-Z]{2}\d{6}$/.test(title) ? title : '');
+  // Page path, File/PerTenantFile AppRelativePath, or a zip file's name.
+  const where = el?.attrs.path ?? el?.attrs.AppRelativePath ?? title;
+  const screen = (/([a-z]{2}\d{6})(?:\.(?:aspx|html?)(?:\.cs)?)?$/i.exec(where)?.[1] ?? '').toUpperCase();
   const facts: [string, string][] = [];
   if (screen) facts.push(['Screen', screen]);
   const screenTitle = (screen && titles?.get(screen)) || el?.attrs.ScreenTitle;

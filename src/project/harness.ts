@@ -1,6 +1,7 @@
 // Browser perf check for the project indexer (not part of the app build).
 // Open /src/project/harness.html on an ad-hoc Vite server after `pnpm fixtures`.
 import { createProjectIndexer } from './index';
+import { benchPhase5 } from './bench-phase5';
 
 const out = document.getElementById('log') as HTMLPreElement;
 const log = (m: string): void => {
@@ -52,4 +53,13 @@ async function main(): Promise<void> {
   (window as unknown as { results: Result[] }).results = results;
   document.body.dataset.done = '1';
 }
-main().catch((e: unknown) => log(`error: ${String(e)}`));
+if (new URLSearchParams(location.search).get('bench') === 'phase5') {
+  benchPhase5(log)
+    .then((r) => {
+      (window as unknown as { phase5: Record<string, number> }).phase5 = r;
+      document.body.dataset.done = '1';
+    })
+    .catch((e: unknown) => log(`error: ${String(e)}`));
+} else {
+  main().catch((e: unknown) => log(`error: ${String(e)}`));
+}

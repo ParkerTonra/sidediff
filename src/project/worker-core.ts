@@ -3,7 +3,7 @@ import type { Side } from '../types';
 import { readEntry } from '../package/zip';
 import { buildIndex, type PackageFiles } from './build';
 import type { IndexRequest, IndexResponse, WorkerPackage } from './protocol';
-import { searchIndex, type SearchState } from './search';
+import { searchIndex, warmSearchCache, type SearchState } from './search';
 
 export function toPackageFiles(p: WorkerPackage): PackageFiles {
   if (p.kind === 'zip') {
@@ -52,7 +52,8 @@ export function createWorkerCore(): (msg: IndexRequest) => Promise<IndexResponse
 
   return (msg) => {
     const next = queue.then(() => handle(msg));
-    queue = next;
+    // After an index, warm the search cache (decoded pages, package text) in the background.
+    queue = msg.type === 'index' ? next.then(() => (state ? warmSearchCache(state).catch(() => undefined) : undefined)) : next;
     return next;
   };
 }
