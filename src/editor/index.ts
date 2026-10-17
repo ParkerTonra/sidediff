@@ -524,7 +524,10 @@ export function createDiffEngine(): SideDiffEngine {
       release(previous.models.a);
       release(previous.models.b);
     }
-    restoreView = null;
+    // Search hits open the item at a line. Applied once the diff is shown, so
+    // its layout (alignment zones, collapsed regions) can't move it afterwards.
+    const target = v.reveal;
+    restoreView = target ? () => selectLine(single ? 'a' : target.side, target.line) : null;
     setPosition(0, 0, true);
     placedLine = null;
     revealLines = [];
@@ -533,9 +536,20 @@ export function createDiffEngine(): SideDiffEngine {
     if (diffEditor) {
       attachModels();
       diffEditor.getModifiedEditor().setScrollTop(0);
+      singleEditor?.setScrollTop(0);
       beginWait();
     }
     emit('view', { key: v.key });
+  }
+
+  /** Centres and selects a 1-based line on `side` (clamped to the model). */
+  function selectLine(side: Side, line: number): void {
+    const ed = editorFor(side);
+    const model = ed?.getModel();
+    if (!ed || !model) return;
+    const n = Math.min(Math.max(1, Math.round(line)), model.getLineCount());
+    ed.setSelection(new monaco.Selection(n, 1, n, model.getLineMaxColumn(n)));
+    ed.revealLineInCenter(n, monaco.editor.ScrollType.Immediate);
   }
 
   function closeItemView(after?: () => void): void {

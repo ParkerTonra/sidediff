@@ -16,6 +16,7 @@ declare global {
     __supersededRuns?: () => number;
     __cachedDiffs?: () => number;
     __monacoModified?: () => monaco.editor.ICodeEditor | undefined;
+    __monacoFind?: (single: boolean, cls: string | null) => { line: number; selected: string; visible: boolean };
   }
 }
 
@@ -102,6 +103,23 @@ window.__cachedDiffs = cachedDiffs;
 // Test-only: the right-hand editor of the harness diff editor.
 window.__monacoModified = () =>
   monaco.editor.getEditors().find((e) => e.getDomNode()?.classList.contains('modified-in-monaco-diff-editor') && e.getDomNode()?.closest('#editor'));
+// Test-only: selection of the single editor, or of the diff side with class `cls`.
+window.__monacoFind = (single, cls) => {
+  const ed = monaco.editor.getEditors().find((e) => {
+    const node = e.getDomNode();
+    if (!node?.closest('#editor')) return false;
+    return single ? !!node.closest('[data-sidediff-single]') : !!cls && node.classList.contains(cls);
+  });
+  const sel = ed?.getSelection();
+  const model = ed?.getModel();
+  if (!ed || !sel || !model) return { line: 0, selected: '', visible: false };
+  const line = sel.startLineNumber;
+  return {
+    line,
+    selected: model.getValueInRange(sel),
+    visible: ed.getVisibleRanges().some((r) => r.startLineNumber <= line && line <= r.endLineNumber),
+  };
+};
 const logLines: string[] = [];
 window.__log = logLines;
 

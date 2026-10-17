@@ -730,6 +730,48 @@ async function main(): Promise<void> {
     JSON.stringify({ inViewSingle, viewReadOnly, afterViewSingle, s3 }),
   );
 
+  // --- ItemView.reveal: open an item at a line (search hits) ---------------
+  const atLine = await page.evaluate(async () => {
+    const e = window.__engine!;
+    const text = (tag: string): string => Array.from({ length: 400 }, (_, i) => `${tag} line ${i + 1}`).join('\n') + '\n';
+    const a = text('same');
+    const b = a.replace('same line 3\n', 'changed line 3\n');
+    const open = (v: Parameters<typeof e.openView>[0]): Promise<void> =>
+      new Promise<void>((r) => {
+        const off = e.on('diff:done', () => {
+          off();
+          setTimeout(r, 50);
+        });
+        e.openView(v);
+      });
+    const sel = (side: 'a' | 'b') => {
+      const host = document.querySelector('[data-sidediff-single]') as HTMLElement | null;
+      const singleOn = !!host && host.offsetWidth > 0;
+      const cls = singleOn ? null : side === 'a' ? 'original-in-monaco-diff-editor' : 'modified-in-monaco-diff-editor';
+      const m = (window as unknown as { __monacoFind: (single: boolean, cls: string | null) => { line: number; selected: string; visible: boolean } }).__monacoFind;
+      return m(singleOn, cls);
+    };
+    await open({ key: 'r1', a, b, language: 'plaintext', reveal: { side: 'b', line: 250 } });
+    const r1 = sel('b');
+    e.setOptions({ diffOnly: true });
+    await open({ key: 'r2', a, b, language: 'plaintext', reveal: { side: 'a', line: 300 } });
+    const r2 = sel('a');
+    e.setOptions({ diffOnly: false });
+    e.setSingle(true);
+    await open({ key: 'r3', a, b, language: 'plaintext', reveal: { side: 'b', line: 120 } });
+    const r3 = sel('a');
+    e.setSingle(false);
+    e.closeView();
+    return { r1, r2, r3 };
+  });
+  check(
+    'openView with reveal centres and selects the line (B, A with diff only, single)',
+    atLine.r1.line === 250 && atLine.r1.selected === 'same line 250' && atLine.r1.visible &&
+      atLine.r2.line === 300 && atLine.r2.selected === 'same line 300' && atLine.r2.visible &&
+      atLine.r3.line === 120 && atLine.r3.selected === 'same line 120' && atLine.r3.visible,
+    JSON.stringify(atLine),
+  );
+
   // --- long changed lines get no character diff (D14) -------------------------
   const proj = await page.evaluate(async () => {
     const get = async (s: string): Promise<string | null> => {
