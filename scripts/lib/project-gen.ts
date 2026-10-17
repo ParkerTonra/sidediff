@@ -159,7 +159,7 @@ export function summaryFirst(tag: string, attrs: [string, string][]): boolean {
   if (tag === 'Graph') return ft === 'ExistingDac' || ft === 'NewDac';
   if (tag === 'Sql') return attrs.some(([k]) => k === 'TableSchemaXml');
   if (tag === 'Page') return true; // every fixture Page has a pageSource
-  return ['DAC', 'Table', 'GenericInquiryScreen', 'GIDesign', 'ScreenWithRights', 'SiteMapNode', 'MobileSiteMap'].includes(tag);
+  return ['DAC', 'Table', 'GenericInquiryScreen', 'GIDesign', 'ScreenWithRights', 'SiteMapNode', 'MobileSiteMap', 'CSAttribute'].includes(tag);
 }
 
 /** Views in order: a summary first or last, then the text views (status comes from the first text view). */

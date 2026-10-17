@@ -3533,8 +3533,8 @@
       "screenId": null,
       "status": "same",
       "views": [
-        "xml",
-        "summary"
+        "summary",
+        "xml"
       ],
       "a": {
         "startLine": 19983,
@@ -3559,8 +3559,8 @@
       "screenId": null,
       "status": "modified",
       "views": [
-        "xml",
-        "summary"
+        "summary",
+        "xml"
       ],
       "a": {
         "startLine": 20002,
