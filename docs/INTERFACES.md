@@ -225,6 +225,75 @@ Principle: nothing new on screen until a project is loaded; then one drawer and 
 6. Large pair: indexing never blocks the main thread > 50 ms and finishes < 1.5 s after load; existing bench lines still pass.
 7. Non-project text (C# pair, plain text): no drawer, no breadcrumb, nothing else changes.
 
+## Packages, browse mode, assemblies and search (Phase 5)
+
+Goal (user): coworkers can open **one** customization package (`.zip` or `project.xml`) and browse everything in it, without waiting on Acumatica's Customization Project Editor. Drag in `.zip` packages, list every file in them (not only what project.xml references), browse and decompile DLLs (built-in ILSpy engine), and search everything. Compare mode keeps working, now with zips too. Decisions D16–D18. Types: `src/types.ts` (`PackageReader`, `PackageSource`, `ItemSummary`, `PackageOverview`, `SearchHit`, `AssemblyBrowser`, `AsmType`, `AppMode`).
+
+Verified against the user's 35 real packages (local only; **never copy them, their names or code into the repo**): a zip is `project.xml` at the root plus each file at its `AppRelativePath` with `/` separators (`Bin/*.dll`, `Pages/XX/*.aspx(.cs)`, `screens/XX/…/*.ts|html`, `App_Data/SnapshotConfigs/*.esc`, images), all entries deflate (method 8). Elements seen beyond Phase 4: `ScreenWithRights` (269), `GenericInquiryScreen` (126), `Automation`, `WidgetFilterRow`, `Report`, `MobileSiteMap`, `MobileSiteMapWorkspaces`, `XportScenario`, `CSAttribute`, `DashboardV2`, `WikiArticle`, `Images`, `Info`.
+
+### Ownership
+
+| Piece | Owner | Where |
+|---|---|---|
+| Zip reader, `createPackageReader()`; indexer support for packages (file items, new element kinds, summaries, overview, search) | Languages | new `src/package/`; `src/project/` |
+| `createAssemblyBrowser()`: TS metadata reader, IL disassembler, search; ICSharpCode.Decompiler on .NET WebAssembly in a worker; `ItemViewApi.setSingle` | Editor | new `src/assembly/`, new `decompiler/` (.NET project), output committed to `public/decompiler/`; `src/editor/` |
+| Start screen, browse/compare mode, drop anywhere, viewers (summary tables, image, binary, assembly browser), overview page, search panel | UI | `src/app/`, `src/styles/`, `src/persist/` |
+| Synthetic package fixture (zip + small DLL), tests, bench lines | QA | `scripts/`, `fixtures/`, `tests/` |
+| Contracts, `main.ts`, `vite.config.ts`/CSP, README | Lead | |
+
+### Zip reader (`src/package/`)
+
+- No dependency: read the End of Central Directory, walk the central directory, read each local header lazily. Methods 0 (stored) and 8 (deflate → `DecompressionStream('deflate-raw')`). UTF-8 names (flag bit 11) and CP437 fallback. Reject encrypted entries and zip64 with a clear message. Check CRC-32 on read (cheap, catches corrupt downloads).
+- Normalise paths to `/`; match `AppRelativePath` case-insensitively with `\` → `/`.
+- `kind` by extension: text (`cs aspx ascx ts js html htm css scss xml config json txt esc rpx sql resx md`), image (`png jpg jpeg gif svg ico bmp webp`), assembly (`dll exe` with an MZ header), else binary.
+- Performance: opening a 50 MB zip (central directory only) < 200 ms; inflating one 1 MB entry < 50 ms. Runs on the main thread only for the directory; inflation is streaming.
+
+### Indexer with packages (`src/project/`)
+
+- `index(a, b, packages)`: when a side has a package, its `projectXml` is the side's text (the app also puts it in the editor). Zip entries become items:
+  - Entries referenced by a `File`/`PerTenantFile` element enrich that item: its `code` view becomes the file content (text) or `image`/`assembly`/`binary`, and status compares content bytes (a reference-only XML side vs a zip side compares the element only).
+  - Unreferenced entries become items too, id `Zip:<path>`, group by kind: `assemblies` (dll), `images`, `files` (text and other). They are listed with a dim "not in project.xml" detail. Missing referenced files become overview warnings.
+- New element kinds: `ScreenWithRights` → security (key: ScreenID from its row data), `GenericInquiryScreen`/`DashboardV2`/`WidgetFilterRow` → inquiries, `Automation` → screens (key: ScreenID), `Report` → reports, `MobileSiteMap`/`MobileSiteMapWorkspaces` → sitemap, `XportScenario` → integration, `CSAttribute` → tables (user-defined fields; key AttributeID), `WikiArticle` → other with a proper name, `Images`/`Info` → other. Keep the data table; unknown still → other.
+- **Summary views** (`viewSummary`, view id `summary`, listed first when available), built from data already parsed (no network, no guessing beyond the XML/ASPX):
+  - DAC customization: Field / Type / Storage / DisplayName / attributes (one row per field).
+  - New DAC / DAC extension Graph (C#): properties with their `[PX…]` attributes, best-effort regex over the CDATA (field name, type, DisplayName, DB attribute); say "best effort" in a fact row.
+  - Table / Sql schema: Column / Type / Nullable / Length / Default, plus indexes for Sql.
+  - Page (ASPX or Modern UI HTML): Screen id, title (from the site map item when present), PXDataSource TypeName + PrimaryView, then one section per container (PXFormView/PXGrid/PXTab… or `qp-*` fieldsets) with DataMember and the DataFields in order.
+  - GenericInquiryScreen: design name, tables (with aliases), relations, parameters, result columns, conditions, from the data-set rows.
+  - ScreenWithRights: role / rights rows.
+  - SiteMapNode / MobileSiteMap: screen, title, URL, workspace, category.
+  - Anything else with attributes: a single facts list.
+- **Overview** (`overview(side)`): name, kind, size, root attributes, counts per group, screens (screenId + title, from site map / pages), assemblies, warnings.
+- **Search** (`search(query)`): runs in the indexer worker over every text view (decoded pages, pretty JSON, CDATA, element XML, package text files), literal by default, optional case/regex, capped at `limit`. < 300 ms for the large pair. Assemblies are searched by the assembly browser; the UI merges both.
+
+### Assembly browser (`src/assembly/`, `decompiler/`)
+
+- **Metadata reader in TypeScript, in a worker:** PE/COFF → CLI header → metadata root → streams (#~, #Strings, #US, #Blob, #GUID); tables TypeDef, TypeRef, TypeSpec, MethodDef, Field, Property(Map), Event(Map), Param, InterfaceImpl, CustomAttribute, MemberRef, NestedClass, Assembly, AssemblyRef, GenericParam. Decode signatures to C#-like strings, custom attribute type names (and string args for `PXUIField(DisplayName=…)`, `PXCacheName`). Acumatica roles by base-type name chain (no Acumatica assemblies needed). Load a 2 MB DLL < 300 ms.
+- **IL disassembler (TS):** method body header, opcode table, tokens resolved to names. Fallback when the decompiler isn't available.
+- **Decompiler:** `decompiler/` is a small .NET 8 `Microsoft.NET.Sdk.WebAssembly` project referencing `ICSharpCode.Decompiler` (MIT; record the version and license in DECISIONS/README). It exposes `[JSExport]` `DecompileType(byte[] assembly, string typeName)` and `DecompileModule(byte[])`, and runs **in a dedicated worker**, never on the main thread. References that aren't available (PX.*) are fine: the decompiler emits fully qualified names. `pnpm build:decompiler` publishes it (Release, trimmed, no AOT) into `public/decompiler/`, which is **committed**, so `pnpm build` needs only Node. It's loaded only the first time the user decompiles. Measure and record: bundle size, cold load, decompiling a 500-line type. CSP: `'wasm-unsafe-eval'` is already set; anything else the .NET runtime needs goes to the Lead for `index.html`.
+- `ItemViewApi.setSingle(true)`: browse mode shows only side A in a plain editor (full text or item view), keeping find, folding, wrap, font size and theme.
+
+### UI (`src/app/`)
+
+- **Start screen** when both sides are empty: two cards, **Browse a package** (one drop zone: "Drop a customization .zip or project.xml") and **Compare two packages** (A / B drop zones), plus "Files are read in your browser; nothing is uploaded." Dropping anywhere on the window works too. Mode switch in the toolbar (`btn-mode`: Browse | Compare), persisted in `AppSettings.mode`. Open/drop goes through `packages.open()` when present.
+- **Browse mode:** one side (A). The explorer shows groups and items without status glyphs or the Changed filter (chips become hidden, the filter defaults to All). The item view shows a single editor (`setSingle`) or a rendered view. The stats bar shows package facts instead of diff stats. Swap/B controls hidden. Switching to Compare keeps A loaded and asks for B.
+- **Overview** as the first explorer entry (`explorer-overview`) and the default view after loading: facts, counts per group (clickable to filter), screens list (click → its page item), assemblies (click → browser), warnings. In compare mode: A and B columns with differences highlighted.
+- **Rendered views:** `summary` → tables from `ItemSummary` (compare: two columns, rows diffed by keyColumn; added/removed/changed rows marked by colour **and** a glyph). `image` → preview with size/dimensions (compare: side by side). `binary` → size, SHA-256, first 4 KB hex. `assembly` → assembly browser: namespace → type tree (Acumatica roles badged: Graph, Graph ext of X, DAC, DAC ext of X), type detail (base, interfaces, attributes, members with signatures), search box (types, members, strings), **Decompile** (C# into the editor, read-only; first use shows "Loading decompiler…") and IL per method. Compare mode for assemblies: a text outline diff (one line per type/member signature) plus decompiled diff per type on demand.
+- **Search everywhere** `Ctrl+Shift+F` (`search-panel`): one box, toggles for case/regex, results grouped by item (with group and side), each hit opens the item at that line. Includes assembly hits for assemblies already loaded, and "Search in assemblies" to load and search all DLLs in the package.
+- Downloads: every file item has **Download** (`btn-download`) saving its original bytes (no network).
+- Keyboard: `Ctrl+Shift+F` search, `Ctrl+O` open, existing keys unchanged. Cheat sheet and SHORTCUTS.md updated.
+
+### Acceptance (Lead verifies in the browser)
+
+1. From a cold start, the start screen offers Browse and Compare; dropping the fixture package zip in Browse opens the overview with correct counts, screens, assemblies and warnings.
+2. Browse: every project.xml item and every zip file is listed (unreferenced files marked); File items show the zip content; images preview; an `.esc` opens as text.
+3. Summaries render for a DAC customization, a Table/Sql, a Page (screen outline with containers and fields), a GI, ScreenWithRights and a site map node.
+4. The assembly browser lists namespaces/types/members, badges Acumatica roles correctly, searches strings, shows IL, and decompiles a type to C# from the committed bundle without any network request.
+5. Search everywhere finds a string inside decoded ASPX, a CDATA C# body, a zip text file and a DLL string literal; clicking opens the right item at the right line.
+6. Compare mode with two zips: file content diffs, assembly outline diff, summary row diffs.
+7. A bare project.xml still works in both modes; the C#/plain-text diff workflow is unchanged; all Phase 1–4 gates still pass.
+8. No network requests other than the optional language packs, even while decompiling.
+
 ## Ports
 
 `pnpm dev` serves on **5317** (5173 is taken on this machine). Playwright uses 5317 with `reuseExistingServer`. For ad-hoc runs of your own, use `./node_modules/.bin/vite --port <5318–5329>`.

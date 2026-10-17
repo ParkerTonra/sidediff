@@ -58,3 +58,12 @@ One changed 20,477-character base64 `pageSource` line made the 1 MB project pair
 
 ## D15. Repeat diff requests are answered from the last result (Editor)
 Monaco re-runs the diff whenever the context-lines count changes, and the engine re-attaches the models for that change so smaller counts re-collapse (D9). Both used to cost a full worker diff (~0.8 s on the large pair), and the late `diff:done` could undo navigation done in the meantime. The provider now keeps the last result keyed by both models' URI + version, the trim option, the time budget, ignore-all-whitespace and degraded mode. A repeat request (context lines, re-attach) is answered from it without the worker (measured: 0 ms compute, 0 worker runs). Any edit, new text or option change misses the key. The engine also reads the current change when a result is applied (not when it arrived), re-anchors on it, and puts the cursor back right after a re-attach, so F7 during a re-diff keeps working.
+
+## D16. Packages: own zip reader, browse mode in the same app (Lead)
+Customization packages are zips of `project.xml` plus files at their `AppRelativePath`, all deflate. A ~200-line central-directory reader with `DecompressionStream('deflate-raw')` covers them with no dependency (zip64 and encryption are rejected with a message; none of the user's 35 real packages use them). Browse mode is a mode of the same app rather than a second build: one side, no statuses, the same explorer, viewers and search, so the compare workflow and browse workflow never drift apart.
+
+## D17. Built-in decompiler: ICSharpCode.Decompiler on .NET WebAssembly, prebuilt and committed (Lead, user choice)
+The user chose a prebuilt bundle (2026-10-17). ILSpy's engine (`ICSharpCode.Decompiler`, MIT) is compiled with the .NET SDK to a `Microsoft.NET.Sdk.WebAssembly` bundle, run in a dedicated worker, loaded only on first decompile, and committed to `public/decompiler/` so building SideDiff needs only Node; rebuilding the bundle (`pnpm build:decompiler`) needs the .NET 8+ SDK. A TypeScript metadata reader and IL disassembler handle browsing, search and the fallback without loading .NET at all. Hosting was declined: coworkers build locally.
+
+## D18. Summaries are table data, not HTML (Lead)
+The indexer produces `ItemSummary` (facts plus keyed tables) and the UI renders it, so compare mode can diff rows by key and tests can assert data, not markup. Summaries only restate what is in the XML/ASPX (C# property parsing is marked best effort).
