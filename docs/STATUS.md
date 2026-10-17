@@ -112,6 +112,50 @@ Each agent keeps its own section current: **Doing**, **Done** (with what was mea
     - The remaining 31/31 are real renames: the fixture's attribute edits sometimes change the key itself (e.g. a Graph `ClassName` gets a suffix: 6 Graph, 17 Table, 7 File, 1 Page). By the spec those are different items.
     - The oracle test also tolerates the sidecar not yet listing the `changes` view for the 6 Pages with children. Project tests: 64; full Vitest run: 192.
   - **Oracle now strict** (507a991): QA regenerated the sidecar (90dce9d). All 174 items of the `project` pair match exactly on id, element, group, name, detail, screenId, status, views and line ranges, plus `counts.byStatus` (same 135, whitespace 4, modified 23, only-a 7, only-b 5). The tolerances above are removed. `pnpm check` is fully green (192 tests).
+- **Phase 5: packages, element kinds, summaries, overview, search** (d57a3d6, aadce6d, a8eb7a5).
+  - **`src/package/`**: `createPackageReader()` with a dependency-free zip reader (`zip.ts`).
+    - Reads the EOCD (behind any comment), then the central directory; local headers are read lazily per entry. Stored and deflate via `DecompressionStream('deflate-raw')`.
+    - UTF-8 names (flag 11) and CP437 otherwise. CRC-32 and size are checked on every read.
+    - Readable errors for encrypted entries, ZIP64, spanned archives, truncated or corrupt archives, damaged deflate data and unknown methods.
+    - Kinds come from the extension, with an MZ sniff for dll/exe (64 assemblies at most per package, else extension only). Non-zip input is read as text with the BOM stripped; a `.zip` name without a zip header is rejected.
+    - `zipHandleOf(source)` hands the Blob and directory to the indexer worker. 11 tests on zips built with `node:zlib` (`test-zip.ts`), covering corrupt, truncated, encrypted, ZIP64, bad CRC, CP437 and a 50 MB directory.
+  - **`src/project/`**: `index(a, b, packages)`.
+    - **File items:** zip files enrich `File`/`PerTenantFile` items. The content view is code (by extension), image, assembly or binary. Status is CRC-32 + size, and text that differs is diffed for whitespace. A reference-only side compares the element.
+    - **Zip items:** unreferenced entries become `Zip:<path>` items in files/assemblies/images, with detail "not in project.xml". `File` elements that point at a dll or image move to assemblies or images.
+    - **New kinds:** ScreenWithRights → security (key = row ScreenID), Automation → screens (`screen`), GenericInquiryScreen/DashboardV2/WidgetFilterRow → inquiries (GI screen id from its site map row), MobileSiteMap(+Workspaces) → sitemap, XportScenario → integration (row Name), CSAttribute → tables (AttributeID), WikiArticle → other (page title), Images and Info → other. Group order adds security, assemblies and images before Other.
+  - **Summary views** (`summary.ts`, `tags.ts`, a tolerant parser for export XML, ASPX and HTML). Every item gets a `summary` view: "Summary" first for structured kinds, "Facts" last otherwise. Status always comes from the first text view.
+    - Structured kinds: DAC fields; DAC C# properties (marked best effort); Table and Sql schema columns plus indexes; Page outline (ASPX: TypeName/PrimaryView, then each DataMember container with its DataFields; Modern UI HTML: `qp-*` containers by `view.bind` with fields and placement); GI (tables, relations, parameters, results, conditions); ScreenWithRights (screen, cache and member rights with labels); site map (screen, title, URL, workspace, category); mobile site map.
+  - **Overview** `overview(side)`: name, kind, bytes, root attributes, counts per group, screens with titles, assemblies, and warnings (scan error, no project.xml, files missing from the zip, unreferenced files).
+  - **Search** `search(query, options)` runs in the worker (`search.ts`) over code views (CDATA, fields, pretty JSON, decoded `pageSource`, package text files) and element XML. CDATA bodies already searched in the code view are skipped in the XML view. Literal, case-sensitive and regex modes; capped at `limit`. Right after an index the worker warms the cache (decoded pages and package texts).
+  - **Other API:** `viewBytes` reads any file item's original bytes. Worker logic lives in `worker-core.ts`, which the tests run in-process.
+  - **Tests:** package 11, phase5 27 (browse/compare packages, every new kind, every summary, overview, search incl. case/regex/limit/invalid regex), project 64 (oracle green against QA's 186-item sidecar, content views). `pnpm check` is green except an irregular-whitespace lint error in Editor's `src/editor/behaviour-check.ts:676`.
+  - **Perf, Chromium, real worker** (`src/project/harness.html?bench=phase5`):
+
+    | Measurement | Target | Result |
+    |---|---|---|
+    | Open a 50 MB zip's directory (2,002 entries) | < 200 ms | 6 ms median, 22 ms worst |
+    | Inflate a 1 MB entry | < 50 ms | 4 ms |
+    | Search the large pair: full miss | < 300 ms | 10 ms median, 14 ms worst |
+    | Search the large pair: 500 hits | < 300 ms | 6 ms |
+    | Search the large pair: regex | < 300 ms | 7 ms |
+
+    Node: `buildIndex` takes 137 ms for the large pair.
+  - **Real packages** (read locally only, counts only, nothing copied): 78 zips in Downloads, 35 with a project.xml.
+    - **Zip reader:** 874 of 874 entries inflated with CRC OK. The 4 zips that didn't open are ZIP64, or larger than 4 GB, which Node's `openAsBlob` misreports; none is a customization package.
+    - **Indexing:** 3,595 items, 0 scan errors. Each package indexed against itself gives 3,595 same. 0 summary failures, and every text view opens.
+    - **Counts by group:** code 969, screens 475, files 618, sitemap 367, sql 336, security 307, tables 222, inquiries 158, images 102, integration 14, reports 12, assemblies 10, other 5.
+    - **Summaries with tables:** Page 447 (69k outline rows), SiteMapNode 356, ScreenWithRights 307, Table 221, Sql schema 194, GI 157, DAC-type Graph 162, DAC 31.
+    - **Overview:** 673 screens, 358 of them titled.
+    - **Search:** worst 131 ms on the biggest package, including the warm-up wait.
+  - **Real-format findings:**
+    - `EntityEndpoint` keeps its name and version on an `<Endpoint name version>` child; the element's own `Name`/`Version` are still read for QA's fixture.
+    - 141 of 335 `Sql` items are `CustomScript` (SQL scripts, label "SQL", language `sql` if installed, detail "SQL script") rather than `TableSchemaXml`.
+    - `Report` carries nested report XML, not CDATA, so it gets Facts only.
+    - `Info` is a one-line ISV flag.
+  - **For the Lead (main.ts):**
+    - `packages: createPackageReader()` comes from `src/package`. Pass sources as `index(a, b, { a: srcA, b: srcB })`, where an empty `a` falls back to `srcA.projectXml`.
+    - `languageAvailable` now also covers `sql`.
+    - Contract notes: `Zip:` items have no `xml` view, which contradicts the "Always includes 'xml'" comment on `ProjectItem.views`. Their `a`/`b` are `{ startLine: 0, endLine: 0 }`, meaning present but not in project.xml. `viewText` returns null for summary, image, assembly and binary.
 
 ## QA / Performance (`scripts/`, `fixtures/`, `tests/`)
 - **PHASE 5 FIXTURES READY** (41b7ce8 DLL, c94020f package). `pnpm fixtures --only package` writes `fixtures/package-a.zip` (133 KB, 12 entries) and `package-b.zip` (130 KB, 10 entries): `project.xml` (= `fixtures/project-a|b.xml`) at the root plus `Pages/SO/SO301000.aspx` + `.aspx.cs`, `screens/SO/SO301000/SO301000.ts|html`, `screens/PO/PO302000/PO302000.ts` (A only), `Bin/Contoso.Extensions.dll`, `Images/contoso-logo.png` (referenced), `Images/contoso-banner.jpg` (unreferenced, A only), `App_Data/SnapshotConfigs/ContosoRoutes.esc`, `Docs/release-notes.txt` (unreferenced text), `Data/routes.bin` (unreferenced binary, stored); `Pages/PO/PO302000.aspx` is referenced but missing (warning). Own deterministic zip writer (`scripts/lib/zip.ts`: deflate, UTF-8 flag, fixed DOS time, CRC-32); verified with Windows bsdtar (CRC-checked extract), .NET `ZipFile`, and an independent reader in the unit test; images decode in Chromium. B: changed `.aspx`, `.ts` and DLL; the JPEG and `PO302000.ts` only in A.
