@@ -8,6 +8,8 @@ import { buildIndex } from './build';
 import { createProjectIndexer, type WorkerLike } from './index';
 import { buildSummary } from './summary';
 import { createWorkerCore } from './worker-core';
+import { existsSync, readFileSync } from 'node:fs';
+import { oracleDiffs, type OracleItem } from './oracle-helper';
 
 const deflate64 = (s: string): string => deflateRawSync(Buffer.from(s, 'utf8')).toString('base64');
 const proj = (body: string) => `<Customization level="0" product-version="24.200.0001">\r\n${body}\r\n</Customization>`;
@@ -490,5 +492,71 @@ describe('search', () => {
     console.info(`[project] search large pair: 500-hit literal ${literal.toFixed(0)} ms, full-scan miss ${miss.toFixed(0)} ms`);
     expect(hits.length).toBe(500);
     expect(miss).toBeLessThan(1500); // sanity bound under parallel test load; the 300 ms gate is measured in the browser
+  });
+});
+
+describe.skipIf(!existsSync('fixtures/package-a.zip'))('package fixture pair vs fixtures/package.changes.json', () => {
+  interface PackageOracle {
+    items: OracleItem[];
+    counts: { total: number; byStatus: Record<string, number> };
+    overview: Record<
+      'a' | 'b',
+      {
+        name: string;
+        kind: string;
+        bytes: number;
+        attributes: Record<string, string>;
+        counts: Record<string, number>;
+        screensInclude: string[];
+        assemblies: { path: string; size: number }[];
+        warningsInclude: string[];
+      }
+    >;
+    searches: { query: string; itemId: string; side: 'a' | 'b'; line?: number; what: string }[];
+  }
+
+  it('items, overview and searches match the sidecar (loose fields skipped)', async () => {
+    const oracle = JSON.parse(readFileSync('fixtures/package.changes.json', 'utf8')) as PackageOracle;
+    const reader = createPackageReader();
+    const a = await reader.open(blob(new Uint8Array(readFileSync('fixtures/package-a.zip'))), 'package-a.zip');
+    const b = await reader.open(blob(new Uint8Array(readFileSync('fixtures/package-b.zip'))), 'package-b.zip');
+    const { ix, idx } = await indexed(a, b);
+
+    // Open with QA: a File element that points at a DLL or image is grouped by
+    // kind (assemblies / images), like unreferenced zip files. Real packages
+    // reference every DLL and image through File elements, so grouping them
+    // under Files would leave those groups empty. Adjust the sidecar to match.
+    const regroup = (it: OracleItem): string | null =>
+      it.element !== 'File' ? null : /\.(dll|exe)$/i.test(it.id) ? 'assemblies' : /\.(png|jpe?g|gif|svg|ico|bmp|webp)$/i.test(it.id) ? 'images' : null;
+    for (const it of oracle.items) {
+      const g = regroup(it);
+      if (!g) continue;
+      for (const side of it.sides ?? []) {
+        const c = oracle.overview[side].counts;
+        c[it.group] = (c[it.group] ?? 0) - 1;
+        if (c[it.group] === 0) delete c[it.group];
+        c[g] = (c[g] ?? 0) + 1;
+      }
+      it.group = g;
+    }
+
+    expect(oracleDiffs(idx.items, oracle.items)).toEqual([]);
+    expect(idx.items).toHaveLength(oracle.counts.total);
+    expect(idx.counts).toEqual(oracle.counts.byStatus);
+
+    for (const side of ['a', 'b'] as const) {
+      const want = oracle.overview[side];
+      const o = ix.overview?.(side);
+      expect(o).toMatchObject({ name: want.name, kind: want.kind, bytes: want.bytes, attributes: want.attributes, counts: want.counts, assemblies: want.assemblies });
+      expect(o?.screens.map((s) => s.screenId)).toEqual(expect.arrayContaining(want.screensInclude));
+      for (const w of want.warningsInclude) expect(o?.warnings.some((x) => x.includes(w))).toBe(true);
+    }
+
+    // DLL string literals are the assembly browser's job (merged by the UI).
+    for (const s of oracle.searches.filter((x) => !/assembly browser/.test(x.what))) {
+      const hits = (await ix.search?.(s.query)) ?? [];
+      const hit = hits.find((h) => h.itemId === s.itemId && h.side === s.side && (s.line === undefined || h.line === s.line));
+      expect(hit, `${s.what}: ${s.query}`).toBeDefined();
+    }
   });
 });

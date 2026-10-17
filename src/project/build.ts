@@ -350,7 +350,8 @@ export async function buildIndex(a: string, b: string, packages: Partial<Record<
       referenced.add(key);
       const f = byKey.get(key);
       if (f) e.file = f;
-      else missing[side].push(p);
+      // A File with its content inline (CDATA) isn't missing anything.
+      else if (!e.raw.cdata.length) missing[side].push(p);
     }
     for (const [key, f] of byKey) if (!referenced.has(key)) zipOnly[side].set(key, f);
   }

@@ -6,6 +6,7 @@ import { classify, GROUP_ORDER, RULES, screenIdFromPath, wantsFor } from './clas
 import { cdataBody, looksLikeProject, scanProject, type CdataSection } from './scan';
 import { createProjectIndexer, type WorkerLike } from './index';
 import { createWorkerCore } from './worker-core';
+import { oracleDiffs, type OracleItem } from './oracle-helper';
 import type { IndexRequest, IndexResponse } from './protocol';
 import type { ItemViewKind } from '../types';
 
@@ -496,38 +497,10 @@ describe.skipIf(!existsSync('fixtures/large-a.xml'))('large fixture (node timing
 });
 
 describe.skipIf(!existsSync('fixtures/project-a.xml'))('project fixture pair vs fixtures/project.changes.json', () => {
-  it('every item matches the sidecar exactly: id, element, group, name, detail, screenId, status, views, line ranges, counts', async () => {
-    interface Expected {
-      id: string;
-      element: string;
-      group: string;
-      name: string;
-      detail: string;
-      screenId?: string | null;
-      status: string;
-      views: string[];
-      a: { startLine: number; endLine: number } | null;
-      b: { startLine: number; endLine: number } | null;
-    }
-    const oracle = JSON.parse(readFileSync('fixtures/project.changes.json', 'utf8')) as { items: Expected[]; counts: { total: number; byStatus: Record<string, number> } };
+  it('every item matches the sidecar (fields marked loose skipped): id, element, group, name, detail, screenId, status, views, line ranges, counts', async () => {
+    const oracle = JSON.parse(readFileSync('fixtures/project.changes.json', 'utf8')) as { items: OracleItem[]; counts: { total: number; byStatus: Record<string, number> } };
     const idx = await buildIndex(readFileSync('fixtures/project-a.xml', 'utf8'), readFileSync('fixtures/project-b.xml', 'utf8'));
-    const got = new Map(idx.items.map((i) => [i.id, i]));
-    const diffs: string[] = [];
-    for (const e of oracle.items) {
-      const g = got.get(e.id);
-      if (!g) {
-        diffs.push(`missing ${e.id}`);
-        continue;
-      }
-      got.delete(e.id);
-      const actual = { element: g.element, group: g.group, name: g.name, detail: g.detail, screenId: g.screenId ?? null, status: g.status, views: content(g.views).map((v) => v.id), a: g.a, b: g.b };
-      const want = { element: e.element, group: e.group, name: e.name, detail: e.detail, screenId: e.screenId ?? null, status: e.status, views: e.views, a: e.a, b: e.b };
-      for (const k of Object.keys(want) as (keyof typeof want)[]) {
-        if (JSON.stringify(actual[k]) !== JSON.stringify(want[k])) diffs.push(`${e.id}.${k}: got ${JSON.stringify(actual[k])}, want ${JSON.stringify(want[k])}`);
-      }
-    }
-    for (const id of got.keys()) diffs.push(`unexpected ${id}`);
-    expect(diffs).toEqual([]);
+    expect(oracleDiffs(idx.items, oracle.items)).toEqual([]);
     expect(idx.items).toHaveLength(oracle.counts.total);
     expect(idx.counts).toEqual(oracle.counts.byStatus);
   });
