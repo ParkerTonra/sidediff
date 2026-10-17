@@ -40,6 +40,8 @@ export interface RawItem {
   captured: CapturedElement[];
   /** Attributes of the first `wants.firstRow.element` that has one of `anyOf` (first 64 KB). */
   firstRow: Record<string, string> | null;
+  /** One entry per `wants.rows` lookup: the first matching element's attributes, or null. */
+  rows: (Record<string, string> | null)[];
 }
 
 export interface CapturedElement {
@@ -60,7 +62,14 @@ export interface DescendantWants {
   attrs: readonly string[];
   count: readonly string[];
   capture?: readonly string[];
-  firstRow?: { element: string; anyOf: readonly string[] };
+  firstRow?: RowWant;
+  /** Extra lookups like firstRow (e.g. a GI's site map row besides its design row). */
+  rows?: readonly RowWant[];
+}
+
+export interface RowWant {
+  element: string;
+  anyOf: readonly string[];
 }
 
 export type WantsFor = (element: string, attrs: Record<string, string>) => DescendantWants | null;
@@ -241,6 +250,7 @@ export function scanProject(text: string, wantsFor: WantsFor = () => null): Scan
       childEnd: -1,
       captured: [],
       firstRow: null,
+      rows: [],
     };
     if (tag.selfClosing) {
       item.endLine = lineAt(i);
@@ -252,6 +262,9 @@ export function scanProject(text: string, wantsFor: WantsFor = () => null): Scan
     const wantCount = new Set(wants?.count ?? []);
     const capture = new Set(wants?.capture ?? []);
     const rowWant = wants?.firstRow;
+    const extraRows = wants?.rows ?? [];
+    item.rows = extraRows.map(() => null);
+    let rowsLeft = extraRows.length;
     let attrsDone = wantAttrs.length === 0;
     let rowDone = !rowWant;
     const firstWanted = wantAttrs[0];
@@ -315,7 +328,8 @@ export function scanProject(text: string, wantsFor: WantsFor = () => null): Scan
       if (wantCount.has(name)) item.descendantCounts[name] = (item.descendantCounts[name] ?? 0) + 1;
       const isCapture = capture.has(name);
       const isRow = !rowDone && rowWant !== undefined && name === rowWant.element && i < descLimit;
-      const parse = isWrapper || isCapture || isRow || (!attrsDone && i < descLimit);
+      const isExtraRow = rowsLeft > 0 && i < descLimit && extraRows.some((r, k) => item.rows[k] === null && r.element === name);
+      const parse = isWrapper || isCapture || isRow || isExtraRow || (!attrsDone && i < descLimit);
       const dAttrs: Record<string, string> | null = parse ? {} : null;
       const t = readTagRest(ne, dAttrs);
       i = t.next;
@@ -338,6 +352,14 @@ export function scanProject(text: string, wantsFor: WantsFor = () => null): Scan
           if (isRow && rowWant.anyOf.some((k) => dAttrs[k])) {
             item.firstRow = dAttrs;
             rowDone = true;
+          }
+          if (isExtraRow) {
+            extraRows.forEach((r, k) => {
+              if (item.rows[k] === null && r.element === name && r.anyOf.some((a) => dAttrs[a])) {
+                item.rows[k] = dAttrs;
+                rowsLeft--;
+              }
+            });
           }
           if (!attrsDone) {
             for (const k of wantAttrs) {

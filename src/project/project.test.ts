@@ -5,7 +5,9 @@ import { buildIndex, compareTexts, inflateBase64, sliceViewText, type IndexedIte
 import { classify, GROUP_ORDER, RULES, screenIdFromPath, wantsFor } from './classify';
 import { cdataBody, looksLikeProject, scanProject, type CdataSection } from './scan';
 import { createProjectIndexer, type WorkerLike } from './index';
+import { createWorkerCore } from './worker-core';
 import type { IndexRequest, IndexResponse } from './protocol';
+import type { ItemViewKind } from '../types';
 
 const BOM = String.fromCharCode(0xfeff);
 const proj = (body: string, rootAttrs = 'level="100" product-version="24.200.0000"') =>
@@ -15,6 +17,8 @@ const graph = (cls: string, src: string, type = 'ExistingGraph') =>
   `<Graph ClassName="${cls}" Source="#CDATA" IsNew="True" FileType="${type}">\n    <CDATA name="Source"><![CDATA[${src}]]></CDATA>\n</Graph>`;
 
 const deflate64 = (s: string): string => deflateRawSync(Buffer.from(s, 'utf8')).toString('base64');
+/** Content views only: the Summary/Facts view (Phase 5) is checked in the summary tests. */
+const content = (v: readonly ItemViewKind[] | undefined): ItemViewKind[] => (v ?? []).filter((x) => x.id !== 'summary');
 const body = (text: string, s: CdataSection | undefined) => (s ? cdataBody(text, s) : undefined);
 
 async function one(xml: string): Promise<IndexedItem & { text: string }> {
@@ -120,7 +124,7 @@ describe('classifier table', () => {
   ])('Graph FileType=%s → code, detail %s, C# code view', async (ft, detail) => {
     const it0 = await one(graph('SOOrderEntry_Extension', 'class X {}', ft));
     expect(it0).toMatchObject({ id: 'Graph:SOOrderEntry_Extension', group: 'code', name: 'SOOrderEntry_Extension', detail, element: 'Graph' });
-    expect(it0.views).toEqual([
+    expect(content(it0.views)).toEqual([
       { id: 'code', label: 'C#', language: 'csharp' },
       { id: 'xml', label: 'XML', language: 'xml' },
     ]);
@@ -135,7 +139,7 @@ describe('classifier table', () => {
         '</DAC>',
     );
     expect(it0).toMatchObject({ id: 'DAC:PX.Objects.SO.SOOrder+Ext', group: 'code', name: 'Ext', detail: 'DAC customization · 2 fields' });
-    expect(it0.views[0]).toEqual({ id: 'code', label: 'Fields', language: 'csharp' });
+    expect(content(it0.views)[0]).toEqual({ id: 'code', label: 'Fields', language: 'csharp' });
     expect(await view(it0, 'code')).toBe('// UsrA : string (DBTableColumn)\n[PXDBString(10)]\n[PXUIField(DisplayName = "A")]\n\n// UsrB : decimal? (NonDB)');
     expect((await one('<DAC type="PX.Objects.PO.POOrder"/>')).name).toBe('POOrder');
   });
@@ -144,7 +148,7 @@ describe('classifier table', () => {
     const aspx = '<%@ Page Language="C#" %>\r\n<asp:Content runat="server"/>';
     const p1 = await one(`<Page path="~/pages/po/po301000.aspx" pageSource="${deflate64(aspx)}" />`);
     expect(p1).toMatchObject({ id: 'Page:~/pages/po/po301000.aspx', group: 'screens', name: 'PO301000', screenId: 'PO301000', detail: 'Page' });
-    expect(p1.views).toEqual([
+    expect(content(p1.views)).toEqual([
       { id: 'code', label: 'ASPX', language: 'xml' },
       { id: 'xml', label: 'XML', language: 'xml' },
     ]);
@@ -152,14 +156,14 @@ describe('classifier table', () => {
 
     const p2 = await one(`<Page path="~/pages/so/so301000.aspx" pageSource="${deflate64('<a/>')}">\n  <PXGrid ID="grid"><Columns/></PXGrid>\n</Page>`);
     expect(p2).toMatchObject({ detail: 'Screen customization' });
-    expect(p2.views.map((v) => `${v.id}:${v.label}:${v.language}`)).toEqual(['code:ASPX:xml', 'changes:Changes:xml', 'xml:XML:xml']);
+    expect(content(p2.views).map((v) => `${v.id}:${v.label}:${v.language}`)).toEqual(['code:ASPX:xml', 'changes:Changes:xml', 'xml:XML:xml']);
     expect(p2.slices.a && (await sliceViewText(p2.text, p2.slices.a, 'changes'))).toBe('  <PXGrid ID="grid"><Columns/></PXGrid>');
 
     const p3 = await one(`<Page path="~/pages/so/so301000.html" isModernUIOnlyNode="True" pageSource="${deflate64('<b/>')}" />`);
     expect(p3).toMatchObject({ detail: 'Modern UI page', name: 'SO301000' });
-    expect(p3.views[0]?.label).toBe('HTML');
+    expect(content(p3.views)[0]?.label).toBe('HTML');
 
-    expect((await one('<Page path="~/pages/x/xx100000.aspx" />')).views.map((v) => v.id)).toEqual(['xml']);
+    expect(content((await one('<Page path="~/pages/x/xx100000.aspx" />')).views).map((v) => v.id)).toEqual(['xml']);
     const bad = await one('<Page path="~/pages/x/xx100000.aspx" pageSource="not base64!!" />');
     expect(await view(bad, 'code')).toMatch(/could not decode pageSource/);
   });
@@ -185,13 +189,13 @@ describe('classifier table', () => {
     const it0 = await one(`<File AppRelativePath="${path}">\n<CDATA name="Content"><![CDATA[body]]></CDATA>\n</File>`);
     expect(it0).toMatchObject({ id: `File:${path}`, group, name, detail: path });
     expect(it0.screenId).toBe(screenId);
-    expect(it0.views[0]).toEqual({ id: 'code', label, language: lang });
+    expect(content(it0.views)[0]).toEqual({ id: 'code', label, language: lang });
   });
 
   it('File without content (real exports) → xml view only, status compares the element', async () => {
     const f = '<File AppRelativePath="App_Code\\X.cs" />';
     const it0 = await one(f);
-    expect(it0.views.map((v) => v.id)).toEqual(['xml']);
+    expect(content(it0.views).map((v) => v.id)).toEqual(['xml']);
     const idx = await buildIndex(proj(f), proj('<File AppRelativePath="App_Code\\X.cs" Description="changed" />'));
     expect(idx.items[0]?.status).toBe('modified');
     expect(screenIdFromPath('Frames/x.aspx')).toBeUndefined();
@@ -201,36 +205,36 @@ describe('classifier table', () => {
     const it0 = await one('<PerTenantFile AppRelativePath="FrontendSources\\screen\\src\\screens\\SO\\SO301000\\SO301000.ts" ScreenId="so301000" />');
     expect(it0).toMatchObject({ group: 'files', name: 'SO301000.ts', screenId: 'SO301000' });
     expect(it0.detail).toMatch(/^Modern UI file · FrontendSources/);
-    expect(it0.views.map((v) => v.id)).toEqual(['xml']);
+    expect(content(it0.views).map((v) => v.id)).toEqual(['xml']);
   });
 
   it('EditorUpdatedFields → screens; bare CDATA JSON pretty-printed; json language only when available', async () => {
     const xml = '<EditorUpdatedFields ScreenId="SO301000"><![CDATA[{"fields":[{"name":"A"}]}]]></EditorUpdatedFields>';
     const it0 = await one(xml);
     expect(it0).toMatchObject({ id: 'EditorUpdatedFields:SO301000', group: 'screens', name: 'SO301000 editor fields', detail: 'Modern UI editor metadata', screenId: 'SO301000' });
-    expect(it0.views[0]).toEqual({ id: 'code', label: 'JSON', language: 'json' });
+    expect(content(it0.views)[0]).toEqual({ id: 'code', label: 'JSON', language: 'json' });
     expect(await view(it0, 'code')).toBe('{\n  "fields": [\n    {\n      "name": "A"\n    }\n  ]\n}');
     const bad = await one('<EditorUpdatedFields ScreenId="X"><![CDATA[not json]]></EditorUpdatedFields>');
     expect(await view(bad, 'code')).toBe('not json');
     // Through the indexer: json → plaintext unless the pack is installed.
     const { createWorker } = fakeWorkers();
     const without = await createProjectIndexer({ createWorker }).index(proj(xml), '');
-    expect(without.items[0]?.views[0]?.language).toBe('plaintext');
+    expect(content(without.items[0]?.views)[0]?.language).toBe('plaintext');
     const withJson = await createProjectIndexer({ createWorker, languageAvailable: (id) => id === 'json' }).index(proj(xml), '');
-    expect(withJson.items[0]?.views[0]?.language).toBe('json');
+    expect(content(withJson.items[0]?.views)[0]?.language).toBe('json');
   });
 
   it('Table → tables, detail = N columns, xml view', async () => {
     const t = await one('<Table TableName="SOLine">\n<Column ColumnName="A"/>\n<Column ColumnName="B"/>\n<Column ColumnName="C"></Column>\n</Table>');
     expect(t).toMatchObject({ id: 'Table:SOLine', group: 'tables', name: 'SOLine', detail: '3 columns' });
-    expect(t.views.map((v) => v.id)).toEqual(['xml']);
+    expect(content(t.views).map((v) => v.id)).toEqual(['xml']);
     expect((await one('<Table TableName="X"><Column ColumnName="A"/></Table>')).detail).toBe('1 column');
   });
 
   it('Sql → sql, "Table schema", Schema view from TableSchemaXml', async () => {
     const s = await one('<Sql TableName="UsrTable" TableSchemaXml="#CDATA">\n<CDATA name="TableSchemaXml"><![CDATA[<table name="UsrTable"/>]]></CDATA>\n</Sql>');
     expect(s).toMatchObject({ id: 'Sql:UsrTable', group: 'sql', name: 'UsrTable', detail: 'Table schema' });
-    expect(s.views[0]).toEqual({ id: 'code', label: 'Schema', language: 'xml' });
+    expect(content(s.views)[0]).toEqual({ id: 'code', label: 'Schema', language: 'xml' });
     expect(await view(s, 'code')).toBe('<table name="UsrTable"/>');
     expect((await one('<Sql Name="Script1"/>')).id).toBe('Sql:Script1');
   });
@@ -238,14 +242,14 @@ describe('classifier table', () => {
   it('Report / ReportDefinition → reports, xml code view', async () => {
     const r = await one('<Report ReportName="SO641000.rpx"><CDATA name="Report"><![CDATA[<Report/>]]></CDATA></Report>');
     expect(r).toMatchObject({ id: 'Report:SO641000.rpx', group: 'reports' });
-    expect(r.views[0]).toMatchObject({ id: 'code', language: 'xml' });
+    expect(content(r.views)[0]).toMatchObject({ id: 'code', language: 'xml' });
     expect(await one('<ReportDefinition Name="R1"/>')).toMatchObject({ id: 'ReportDefinition:R1', group: 'reports' });
   });
 
   it('SiteMapNode → sitemap, identity/screenId from the first <row> with ScreenID, detail its Title', async () => {
     const s = await one('<SiteMapNode>\n<data-set><relations/><layout/><row NodeID="1"/><row Title="Sales Orders" ScreenID="so301000" Url="~/x"/></data-set>\n</SiteMapNode>');
     expect(s).toMatchObject({ id: 'SiteMapNode:so301000', group: 'sitemap', name: 'so301000', detail: 'Sales Orders', screenId: 'SO301000' });
-    expect(s.views.map((v) => v.id)).toEqual(['xml']);
+    expect(content(s.views).map((v) => v.id)).toEqual(['xml']);
     expect((await one('<SiteMapNode><row Title="Only title"/></SiteMapNode>')).id).toBe('SiteMapNode:Only title');
   });
 
@@ -269,18 +273,18 @@ describe('classifier table', () => {
   });
 
   it('unknown elements → other, name = identity, detail = element; generic keys, descendants, ordinal; CDATA as code', async () => {
-    const text = proj('<ScreenWithRights ScreenID="SO301000"/>\n<Localization><Item Key="k1"/></Localization>\n<Mystery/>\n<Mystery/>\n<Wiki><CDATA name="Body"><![CDATA[<p/>]]></CDATA></Wiki>');
+    const text = proj('<ScreenThing ScreenID="SO301000"/>\n<Localization><Item Key="k1"/></Localization>\n<Mystery/>\n<Mystery/>\n<Wiki><CDATA name="Body"><![CDATA[<p/>]]></CDATA></Wiki>');
     const idx = await buildIndex(text, '');
     expect(idx.items.map((i) => [i.id, i.group, i.name, i.detail])).toEqual([
       ['Mystery:1', 'other', '1', 'Mystery'],
       ['Wiki:1', 'other', '1', 'Wiki'],
       ['Mystery:2', 'other', '2', 'Mystery'],
       ['Localization:k1', 'other', 'k1', 'Localization'],
-      ['ScreenWithRights:SO301000', 'other', 'SO301000', 'ScreenWithRights'],
+      ['ScreenThing:SO301000', 'other', 'SO301000', 'ScreenThing'],
     ]);
     // the <CDATA name="Body"> wrapper is not mistaken for an identity; its body is the code view
     const wiki = idx.items.find((i) => i.element === 'Wiki');
-    expect(wiki?.views[0]).toEqual({ id: 'code', label: 'Code', language: 'xml' });
+    expect(content(wiki?.views)[0]).toEqual({ id: 'code', label: 'Code', language: 'xml' });
   });
 
   it('classify falls back to the ordinal for a known element without keys', () => {
@@ -294,7 +298,7 @@ describe('index: ids, matching, status, views', () => {
     const pg = (kids: string) => `<Page path="~/pages/so/so301000.aspx">\r\n${kids}\r\n</Page>`;
     const kids = '  <PXGrid ID="g">\r\n    <Columns/>\r\n  </PXGrid>\r\n  <PXField ID="f" />';
     const it0 = await one(pg(kids));
-    expect(it0.views.map((v) => v.id)).toEqual(['changes', 'xml']);
+    expect(content(it0.views).map((v) => v.id)).toEqual(['changes', 'xml']);
     expect(it0.slices.a && (await sliceViewText(it0.text, it0.slices.a, 'changes'))).toBe(kids);
     const idx = await buildIndex(proj(pg(kids)), proj(pg(kids.replace('ID="f"', 'ID="h"'))));
     expect(idx.items[0]?.status).toBe('modified');
@@ -378,6 +382,7 @@ function fakeWorkers() {
   const made: { terminated: boolean; posted: IndexRequest[] }[] = [];
   const createWorker = (): WorkerLike => {
     const rec = { terminated: false, posted: [] as IndexRequest[] };
+    const core = createWorkerCore();
     const w: WorkerLike = {
       onmessage: null,
       onerror: null,
@@ -385,9 +390,8 @@ function fakeWorkers() {
         rec.posted.push(msg);
         // Reply asynchronously, like a real worker, unless terminated first.
         setTimeout(() => {
-          void buildIndex(msg.a, msg.b).then((index) => {
+          void core(msg).then((res: IndexResponse) => {
             if (rec.terminated) return;
-            const res: IndexResponse = { id: msg.id, ok: true, index, workerMs: 0 };
             w.onmessage?.({ data: structuredClone(res) } as MessageEvent<IndexResponse>);
           });
         }, 5);
@@ -444,7 +448,8 @@ describe('createProjectIndexer', () => {
     expect(idx.sides.b.isProject).toBe(false);
     expect(made).toHaveLength(0);
     await ix.index(A, 'x'.repeat(1000));
-    expect(made[0]?.posted[0]?.b).toBe('');
+    const first = made[0]?.posted[0];
+    expect(first?.type === 'index' ? first.b : null).toBe('');
   });
 
   it('worker crash rejects with a readable error and the next call respawns', async () => {
@@ -515,7 +520,7 @@ describe.skipIf(!existsSync('fixtures/project-a.xml'))('project fixture pair vs 
         continue;
       }
       got.delete(e.id);
-      const actual = { element: g.element, group: g.group, name: g.name, detail: g.detail, screenId: g.screenId ?? null, status: g.status, views: g.views.map((v) => v.id), a: g.a, b: g.b };
+      const actual = { element: g.element, group: g.group, name: g.name, detail: g.detail, screenId: g.screenId ?? null, status: g.status, views: content(g.views).map((v) => v.id), a: g.a, b: g.b };
       const want = { element: e.element, group: e.group, name: e.name, detail: e.detail, screenId: e.screenId ?? null, status: e.status, views: e.views, a: e.a, b: e.b };
       for (const k of Object.keys(want) as (keyof typeof want)[]) {
         if (JSON.stringify(actual[k]) !== JSON.stringify(want[k])) diffs.push(`${e.id}.${k}: got ${JSON.stringify(actual[k])}, want ${JSON.stringify(want[k])}`);

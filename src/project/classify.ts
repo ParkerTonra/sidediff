@@ -2,9 +2,15 @@
 // name; add a row to support a new element. Unknown elements go to "other".
 // Formats follow INTERFACES.md "Project explorer" (checked against a real export).
 import type { LanguageId, ProjectGroup } from '../types';
-import type { CdataSection, DescendantWants, RawItem } from './scan';
+import type { CdataSection, DescendantWants, RawItem, RowWant } from './scan';
 
-export const GROUP_ORDER: readonly ProjectGroup[] = ['code', 'screens', 'tables', 'sql', 'reports', 'inquiries', 'sitemap', 'integration', 'files', 'other'];
+export const GROUP_ORDER: readonly ProjectGroup[] = ['code', 'screens', 'tables', 'sql', 'reports', 'inquiries', 'sitemap', 'integration', 'security', 'files', 'assemblies', 'images', 'other'];
+
+/**
+ * Summary builders (summary.ts). 'facts' is the generic one: every element
+ * gets it as its last view; the structured ones are listed first.
+ */
+export type SummaryKind = 'dac' | 'dacCode' | 'table' | 'sqlSchema' | 'page' | 'gi' | 'rights' | 'sitemap' | 'mobileSitemap' | 'facts';
 
 /** Identity fallback when an element has none of its own key attributes. */
 export const GENERIC_KEYS = ['Name', 'name', 'ScreenID', 'ClassName', 'TableName', 'ReportName', 'path', 'AppRelativePath', 'Title', 'Key'] as const;
@@ -18,7 +24,9 @@ export type CodeSource =
   /** Page pageSource: base64 of raw-deflate. Decoded on demand. */
   | { kind: 'deflate'; base64: string }
   /** EditorUpdatedFields: bare CDATA holding JSON, pretty-printed when it parses. */
-  | { kind: 'json'; sections: CdataSection[] };
+  | { kind: 'json'; sections: CdataSection[] }
+  /** A text file in the side's package (zip path). */
+  | { kind: 'file'; path: string };
 
 export interface CodeSpec {
   label: string;
@@ -37,6 +45,9 @@ export interface Classified {
   code: CodeSpec | null;
   /** Offer a "changes" view: only the element's child lines (a Page's control delta). */
   changes: boolean;
+  summary: SummaryKind;
+  /** Screen title when the element knows it (site map rows, ScreenTitle). */
+  title?: string;
 }
 
 interface Rule {
@@ -45,7 +56,9 @@ interface Rule {
   /** Start-tag attributes tried in order for the identity. */
   keys: readonly string[];
   /** First descendant `row` having one of these; its values are tried next, in order. */
-  firstRow?: { element: string; anyOf: readonly string[] };
+  firstRow?: RowWant;
+  /** More first-match lookups (item.rows), e.g. a GI's site map row. */
+  rows?: readonly RowWant[];
   /** Descendant attributes tried after that (default: GENERIC_KEYS). */
   descendantKeys?: readonly string[];
   /** Descendant element names to count (for detail). */
@@ -61,6 +74,8 @@ interface Rule {
   codeLabel?: string | ((item: RawItem) => string);
   codeLanguage?: LanguageId | ((item: RawItem) => LanguageId | null);
   changes?: (item: RawItem) => boolean;
+  summary?: SummaryKind | ((item: RawItem) => SummaryKind);
+  title?: (item: RawItem) => string | undefined;
 }
 
 const GRAPH_TYPES: Record<string, string> = {
@@ -93,6 +108,10 @@ const SCREEN_PATH_RE = /(?:^|[\\/])pages[\\/][a-z0-9]{2}[\\/]([a-z]{2}[0-9]{6})\
 export const screenIdFromPath = (p: string): string | undefined => SCREEN_PATH_RE.exec(p)?.[1]?.toUpperCase();
 const upper = (s: string | undefined): string | undefined => (s ? s.toUpperCase() : undefined);
 
+const SITEMAP_ROW: RowWant = { element: 'row', anyOf: ['ScreenID'] };
+const isSqlScript = (it: RawItem): boolean => it.attrs.CustomScript !== undefined || it.cdata.some((s) => s.name === 'CustomScript');
+const endpointVersion = (it: RawItem): string | undefined => it.attrs.Version ?? it.firstRow?.version;
+
 const fieldsCode = (it: RawItem): CodeSpec | null => {
   const fields = it.captured.filter((c) => c.element === 'Field');
   if (!fields.length) return null;
@@ -124,6 +143,7 @@ export const RULES: readonly Rule[] = [
     },
     codeLabel: 'C#',
     codeLanguage: 'csharp',
+    summary: (it) => (/Dac$/.test(it.attrs.FileType ?? '') ? 'dacCode' : 'facts'),
   },
   {
     elements: ['DAC'],
@@ -140,6 +160,7 @@ export const RULES: readonly Rule[] = [
       return `DAC customization · ${n} field${n === 1 ? '' : 's'}`;
     },
     code: fieldsCode,
+    summary: 'dac',
   },
   {
     elements: ['Page'],
@@ -157,6 +178,8 @@ export const RULES: readonly Rule[] = [
       return { label: ext(it.attrs.path ?? '') === 'html' ? 'HTML' : 'ASPX', language: 'xml', source: { kind: 'deflate', base64: src } };
     },
     changes: (it) => it.childCount > 0,
+    summary: (it) => (it.attrs.pageSource || it.cdata.length ? 'page' : 'facts'),
+    title: (it) => it.attrs.ScreenTitle,
   },
   {
     elements: ['File'],
@@ -198,17 +221,21 @@ export const RULES: readonly Rule[] = [
       const n = it.descendantCounts.Column ?? 0;
       return `${n} column${n === 1 ? '' : 's'}`;
     },
+    summary: 'table',
   },
   {
     elements: ['Sql'],
     group: 'sql',
     keys: ['TableName', 'Name'],
-    detail: () => 'Table schema',
+    // Real exports carry either a TableSchemaXml (schema) or a CustomScript (SQL).
+    detail: (it) => (isSqlScript(it) ? 'SQL script' : 'Table schema'),
     code: (it) => {
+      if (isSqlScript(it)) return it.cdata.length ? { label: 'SQL', language: 'sql', source: { kind: 'cdata', sections: it.cdata } } : null;
       const schema = it.cdata.filter((s) => s.name === 'TableSchemaXml');
       const sections = schema.length ? schema : it.cdata;
       return sections.length ? { label: 'Schema', language: 'xml', source: { kind: 'cdata', sections } } : null;
     },
+    summary: (it) => (isSqlScript(it) ? 'facts' : 'sqlSchema'),
   },
   { elements: ['Report', 'ReportDefinition'], group: 'reports', keys: ['ReportName', 'Name'], codeLabel: 'Report', codeLanguage: 'xml' },
   {
@@ -218,6 +245,32 @@ export const RULES: readonly Rule[] = [
     firstRow: { element: 'row', anyOf: ['ScreenID'] },
     detail: (it) => it.firstRow?.Title ?? '',
     screenId: (it) => upper(it.firstRow?.ScreenID),
+    title: (it) => it.firstRow?.Title,
+    code: () => null,
+    summary: 'sitemap',
+  },
+  {
+    elements: ['ScreenWithRights'],
+    group: 'security',
+    keys: [],
+    firstRow: { element: 'row', anyOf: ['ScreenID'] },
+    detail: (it) => (it.firstRow?.Title ? `Access rights · ${it.firstRow.Title}` : 'Access rights'),
+    screenId: (it) => upper(it.firstRow?.ScreenID),
+    title: (it) => it.firstRow?.Title,
+    code: () => null,
+    summary: 'rights',
+  },
+  {
+    elements: ['Automation'],
+    group: 'screens',
+    keys: ['screen', 'ScreenID'],
+    count: ['Field'],
+    name: (it, id) => `${it.attrs.screen ?? it.attrs.ScreenID ?? id} automation`,
+    detail: (it) => {
+      const n = it.descendantCounts.Field ?? 0;
+      return n ? `Automation · ${n} field${n === 1 ? '' : 's'}` : '';
+    },
+    screenId: (it) => upper(it.attrs.screen ?? it.attrs.ScreenID),
     code: () => null,
   },
   {
@@ -225,16 +278,94 @@ export const RULES: readonly Rule[] = [
     group: 'inquiries',
     keys: [],
     firstRow: { element: 'row', anyOf: ['Name', 'DesignID'] },
+    rows: [SITEMAP_ROW],
+    detail: (it) => it.rows[0]?.ScreenID ?? 'Generic inquiry',
+    screenId: (it) => upper(it.rows[0]?.ScreenID),
+    title: (it) => it.rows[0]?.Title,
+    code: () => null,
+    summary: (it) => (it.element === 'DashboardMaintenance' ? 'facts' : 'gi'),
+  },
+  {
+    elements: ['DashboardV2'],
+    group: 'inquiries',
+    keys: [],
+    firstRow: { element: 'row', anyOf: ['Name', 'DashboardID'] },
+    rows: [SITEMAP_ROW],
+    detail: (it) => (it.rows[0]?.ScreenID ? `Dashboard · ${it.rows[0].ScreenID}` : 'Dashboard'),
+    screenId: (it) => upper(it.rows[0]?.ScreenID),
+    title: (it) => it.rows[0]?.Title,
+    code: () => null,
+  },
+  { elements: ['WidgetFilterRow'], group: 'inquiries', keys: [], detail: () => 'Widget filter', code: () => null },
+  {
+    elements: ['MobileSiteMap'],
+    group: 'sitemap',
+    keys: ['ScreenID'],
+    detail: (it) => `Mobile site map${it.attrs.Type ? ` · ${it.attrs.Type}` : ''}`,
+    screenId: (it) => upper(it.attrs.ScreenID),
+    code: () => null,
+    summary: 'mobileSitemap',
+  },
+  {
+    elements: ['MobileSiteMapWorkspaces'],
+    group: 'sitemap',
+    keys: [],
+    firstRow: { element: 'row', anyOf: ['Name', 'DisplayName'] },
+    detail: () => 'Mobile workspaces',
     code: () => null,
   },
   {
-    elements: ['EntityEndpoint', 'XportScenario', 'ImportScenario', 'WebHook', 'BusinessEvent'],
+    elements: ['CSAttribute'],
+    group: 'tables',
+    keys: ['AttributeID'],
+    firstRow: { element: 'row', anyOf: ['AttributeID'] },
+    detail: (it) => (it.firstRow?.Description ? `Attribute · ${it.firstRow.Description}` : 'Attribute'),
+    code: () => null,
+  },
+  {
+    elements: ['EntityEndpoint'],
     group: 'integration',
     keys: ['Name'],
-    // One endpoint name can exist in several versions (INTERFACES.md).
-    identity: (it, base) => (it.element === 'EntityEndpoint' && it.attrs.Version ? `${base}@${it.attrs.Version}` : base),
-    name: (it, id) => it.attrs.Name ?? id,
-    detail: (it) => (it.element === 'EntityEndpoint' && it.attrs.Version ? `Version ${it.attrs.Version}` : ''),
+    // Real exports keep name/version on an <Endpoint> child; the element itself may carry Name/Version.
+    firstRow: { element: 'Endpoint', anyOf: ['name'] },
+    identity: (it, base) => {
+      const name = it.attrs.Name ?? it.firstRow?.name ?? base;
+      const v = endpointVersion(it);
+      return v ? `${name}@${v}` : name;
+    },
+    name: (it, id) => it.attrs.Name ?? it.firstRow?.name ?? id,
+    detail: (it) => {
+      const v = endpointVersion(it);
+      return v ? `Version ${v}` : '';
+    },
+    code: () => null,
+  },
+  {
+    elements: ['XportScenario', 'ImportScenario', 'WebHook', 'BusinessEvent'],
+    group: 'integration',
+    keys: ['Name'],
+    firstRow: { element: 'row', anyOf: ['Name'] },
+    detail: (it) => (it.element === 'XportScenario' ? `Scenario${it.firstRow?.ScreenID ? ` · ${it.firstRow.ScreenID}` : ''}` : ''),
+    screenId: (it) => (it.element === 'XportScenario' ? upper(it.firstRow?.ScreenID) : undefined),
+    code: () => null,
+  },
+  {
+    elements: ['WikiArticle'],
+    group: 'other',
+    keys: [],
+    firstRow: { element: 'row', anyOf: ['Name'] },
+    rows: [{ element: 'WikiPageLanguage', anyOf: ['Title'] }],
+    name: (it, id) => it.rows[0]?.Title ?? it.firstRow?.Name ?? id,
+    detail: () => 'Wiki article',
+    code: () => null,
+  },
+  { elements: ['Images'], group: 'other', keys: [], name: (_it, id) => (/^\d+$/.test(id) ? `Images ${id}` : id), detail: () => 'Images', code: () => null },
+  {
+    elements: ['Info'],
+    group: 'other',
+    keys: [],
+    name: () => 'Project info',
+    detail: (it) => [it.attrs.IsISV === 'True' ? 'ISV' : '', it.attrs.Initials ?? ''].filter(Boolean).join(' · ') || 'Info',
     code: () => null,
   },
 ];
@@ -253,8 +384,9 @@ export function wantsFor(element: string, attrs: Record<string, string>): Descen
     count: rule?.count ?? [],
     ...(rule?.capture ? { capture: rule.capture } : {}),
     ...(rule?.firstRow ? { firstRow: rule.firstRow } : {}),
+    ...(rule?.rows ? { rows: rule.rows } : {}),
   };
-  return w.attrs.length || w.count.length || w.capture || w.firstRow ? w : null;
+  return w.attrs.length || w.count.length || w.capture || w.firstRow || w.rows ? w : null;
 }
 
 const pick = (keys: readonly string[], from: Record<string, string> | null): string | undefined => {
@@ -283,12 +415,13 @@ export function classify(item: RawItem, ordinal: number): Classified {
     item.cdata.length ? { label, language, source: { kind: 'cdata', sections: item.cdata } } : null;
 
   if (!rule) {
-    return { group: 'other', identity: base, name: base, detail: item.element, code: defaultCode('Code', null), changes: false };
+    return { group: 'other', identity: base, name: base, detail: item.element, code: defaultCode('Code', null), changes: false, summary: 'facts' };
   }
   const identity = rule.identity ? rule.identity(item, base) : base;
   const label = typeof rule.codeLabel === 'function' ? rule.codeLabel(item) : (rule.codeLabel ?? 'Code');
   const language = typeof rule.codeLanguage === 'function' ? rule.codeLanguage(item) : (rule.codeLanguage ?? null);
   const screenId = rule.screenId?.(item);
+  const title = rule.title?.(item);
   return {
     group: typeof rule.group === 'function' ? rule.group(item) : rule.group,
     identity,
@@ -297,5 +430,7 @@ export function classify(item: RawItem, ordinal: number): Classified {
     ...(screenId ? { screenId } : {}),
     code: rule.code ? rule.code(item) : defaultCode(label, language),
     changes: rule.changes ? rule.changes(item) : false,
+    summary: typeof rule.summary === 'function' ? rule.summary(item) : (rule.summary ?? 'facts'),
+    ...(title ? { title } : {}),
   };
 }
