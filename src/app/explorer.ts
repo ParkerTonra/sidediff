@@ -14,10 +14,15 @@ export const GROUP_LABELS: Record<ProjectGroup, string> = {
   inquiries: 'Generic inquiries',
   sitemap: 'Site map',
   integration: 'Integration',
+  security: 'Security',
   files: 'Files',
+  assemblies: 'Assemblies',
+  images: 'Images',
   other: 'Other',
 };
-const GROUP_ORDER: readonly ProjectGroup[] = ['code', 'screens', 'tables', 'sql', 'reports', 'inquiries', 'sitemap', 'integration', 'files', 'other'];
+const GROUP_ORDER: readonly ProjectGroup[] = [
+  'code', 'screens', 'tables', 'sql', 'reports', 'inquiries', 'sitemap', 'integration', 'security', 'files', 'assemblies', 'images', 'other',
+];
 
 /** Colour and shape, so status never depends on colour alone. */
 export const STATUS_GLYPH: Record<ItemStatus, string> = { modified: '~', whitespace: '≈', 'only-a': '−', 'only-b': '+', same: '=' };
