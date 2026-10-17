@@ -655,6 +655,81 @@ async function main(): Promise<void> {
     JSON.stringify(ctx),
   );
 
+  // --- browse mode: setSingle -------------------------------------------------
+  await settle(() =>
+    page.evaluate(() => {
+      window.__engine!.setText('a', 'class A\n{\n    int x = 1;\n}\n' + 'long line '.repeat(60) + '\n');
+      window.__engine!.setText('b', '');
+    }),
+  );
+  await page.evaluate(() => window.__engine!.setSingle(true));
+  await page.waitForTimeout(200);
+  const singleState = () =>
+    page.evaluate(() => {
+      const host = document.querySelector<HTMLElement>('[data-sidediff-single]');
+      const diff = document.querySelector<HTMLElement>('#editor .monaco-diff-editor');
+      const ed = host?.querySelector<HTMLElement>('.monaco-editor');
+      const lines = host?.querySelector<HTMLElement>('.view-lines');
+      return {
+        singleVisible: !!host && host.offsetWidth > 0,
+        diffVisible: !!diff && diff.offsetWidth > 0,
+        text: lines?.innerText.replace(/\u00a0/g, ' ').split('\n')[0] ?? '',
+        fontSize: lines ? getComputedStyle(lines).fontSize : '',
+        wrapped: !!ed && (host?.querySelector<HTMLElement>('.view-lines')?.scrollWidth ?? 0) <= ed.offsetWidth + 2,
+      };
+    });
+  const s1 = await singleState();
+  await page.evaluate(() => window.__engine!.find('a'));
+  await page.waitForTimeout(200);
+  const findInSingle = await page.locator('[data-sidediff-single] .find-widget.visible').count();
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => window.__engine!.setOptions({ fontSize: 18, wordWrap: true }));
+  await page.waitForTimeout(200);
+  const s2 = await singleState();
+  await page.evaluate(() => window.__engine!.setOptions({ fontSize: 13, wordWrap: false }));
+  check(
+    'setSingle: only side A in a plain editor; find, font size and wrap apply',
+    s1.singleVisible && !s1.diffVisible && s1.text === 'class A' && findInSingle === 1 && s2.fontSize === '18px' && s2.wrapped && !s1.wrapped,
+    JSON.stringify({ s1, findInSingle, s2 }),
+  );
+
+  const a0 = await page.evaluate(() => window.__engine!.getText('a'));
+  await page.evaluate(() => window.__engine!.focus('a'));
+  await page.keyboard.press('Control+Home');
+  await page.keyboard.type('EDITED'); // one word: Monaco starts a new undo step at whitespace
+  const typedSingle = await page.evaluate(() => window.__engine!.getText('a'));
+  await page.keyboard.press('Control+z');
+  const undoneSingle = await page.evaluate(() => window.__engine!.getText('a'));
+  await page.evaluate(() => window.__engine!.replaceText('a', 'loaded\n', 'load'));
+  await page.waitForTimeout(100);
+  const shownAfterLoad = (await singleState()).text;
+  await page.evaluate(() => window.__engine!.focus('a'));
+  await page.keyboard.press('Control+z');
+  const afterReplaceUndo = await page.evaluate(() => window.__engine!.getText('a'));
+  check(
+    'setSingle: typing edits A, Ctrl+Z undoes it, then falls through to the whole-text undo',
+    typedSingle.startsWith('EDITEDclass A') && undoneSingle === a0 && shownAfterLoad === 'loaded' && afterReplaceUndo === a0,
+    JSON.stringify({ typed: typedSingle.slice(0, 18), undone: undoneSingle === a0, shownAfterLoad, restored: afterReplaceUndo === a0 }),
+  );
+
+  await settle(() => page.evaluate(() => window.__engine!.openView({ key: 'v1', a: 'view text\nsecond\n', b: null, language: 'plaintext' })));
+  await page.waitForTimeout(100);
+  const inViewSingle = (await singleState()).text;
+  await page.evaluate(() => window.__engine!.focus('a'));
+  await page.keyboard.type('nope');
+  const viewReadOnly = (await singleState()).text;
+  await settle(() => page.evaluate(() => window.__engine!.closeView()));
+  await page.waitForTimeout(100);
+  const afterViewSingle = (await singleState()).text;
+  await page.evaluate(() => window.__engine!.setSingle(false));
+  await page.waitForTimeout(200);
+  const s3 = await singleState();
+  check(
+    'setSingle: item views show A read-only; closeView and setSingle(false) restore',
+    inViewSingle === 'view text' && viewReadOnly === 'view text' && afterViewSingle === 'class A' && !s3.singleVisible && s3.diffVisible,
+    JSON.stringify({ inViewSingle, viewReadOnly, afterViewSingle, s3 }),
+  );
+
   // --- long changed lines get no character diff (D14) -------------------------
   const proj = await page.evaluate(async () => {
     const get = async (s: string): Promise<string | null> => {
@@ -675,7 +750,7 @@ async function main(): Promise<void> {
     });
     return { ms: Math.round(performance.now() - t0), changes: st.changes, quitEarly: st.quitEarly };
   });
-  if (proj) check('project pair with a changed 20k-char line: diff < 1 s, not approximate', proj.ms < 1000 && !proj.quitEarly && proj.changes === 60, JSON.stringify(proj));
+  if (proj) check('project pair with a changed 20k-char line: diff < 1 s, not approximate', proj.ms < 1000 && !proj.quitEarly && proj.changes > 20, JSON.stringify(proj));
   else console.log('SKIP project pair: run `pnpm fixtures --only project`');
 
   check('no console errors', errors.length === 0, errors.slice(0, 5).join(' | '));

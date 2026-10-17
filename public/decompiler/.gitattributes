@@ -1,0 +1,3 @@
+# The decompiler bundle is committed exactly as `pnpm build:decompiler` writes it
+# (blazor.boot.json lists integrity hashes of these files): no EOL conversion.
+* -text

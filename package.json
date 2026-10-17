@@ -14,7 +14,8 @@
     "check": "pnpm typecheck && pnpm lint && pnpm test",
     "e2e": "playwright test",
     "bench": "node scripts/bench.ts",
-    "fixtures": "node scripts/gen-fixtures.ts"
+    "fixtures": "node scripts/gen-fixtures.ts",
+    "build:decompiler": "node decompiler/build.mjs"
   },
   "dependencies": {
     "monaco-editor": "0.57.0",

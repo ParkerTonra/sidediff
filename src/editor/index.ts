@@ -82,17 +82,10 @@ function mark(name: string): void {
   }
 }
 
-/** Editor options that keep huge models cheap. Applied to both sides. */
-const BASE_EDITOR_OPTIONS: monaco.editor.IDiffEditorConstructionOptions = {
+/** Editor options that keep huge models cheap, shared by the diff editor and the plain editor. */
+const COMMON_EDITOR_OPTIONS: monaco.editor.IEditorOptions = {
   automaticLayout: true,
-  originalEditable: true,
   readOnly: false,
-  diffAlgorithm: 'advanced',
-  experimental: { showMoves: false },
-  renderMarginRevertIcon: false,
-  renderGutterMenu: false,
-  renderOverviewRuler: true,
-  enableSplitViewResizing: true,
   scrollBeyondLastLine: false,
   // Features that scan the whole model or chatter with the worker.
   links: false,
@@ -110,7 +103,21 @@ const BASE_EDITOR_OPTIONS: monaco.editor.IDiffEditorConstructionOptions = {
   matchBrackets: 'always',
 };
 
-export type SideDiffEngine = DiffEngine & ItemViewApi & TextHistoryApi;
+const BASE_EDITOR_OPTIONS: monaco.editor.IDiffEditorConstructionOptions = {
+  ...COMMON_EDITOR_OPTIONS,
+  originalEditable: true,
+  diffAlgorithm: 'advanced',
+  experimental: { showMoves: false },
+  renderMarginRevertIcon: false,
+  renderGutterMenu: false,
+  renderOverviewRuler: true,
+  enableSplitViewResizing: true,
+};
+
+/** The plain editor of browse mode (setSingle). */
+const SINGLE_EDITOR_OPTIONS: monaco.editor.IStandaloneEditorConstructionOptions = { ...COMMON_EDITOR_OPTIONS, folding: true };
+
+export type SideDiffEngine = DiffEngine & Required<Pick<ItemViewApi, 'setSingle'>> & ItemViewApi & TextHistoryApi;
 
 interface OpenView {
   key: string;
@@ -131,6 +138,10 @@ export function createDiffEngine(): SideDiffEngine {
   const domCleanups: (() => void)[] = [];
 
   let diffEditor: monaco.editor.IStandaloneDiffEditor | null = null;
+  /** Browse mode: side A alone in a plain editor (setSingle). Created on first use. */
+  let singleEditor: monaco.editor.IStandaloneCodeEditor | null = null;
+  let single = false;
+  let hosts: { diff: HTMLElement; single: HTMLElement } | null = null;
   let options: DiffOptions = { ...DEFAULT_SETTINGS.diff };
   let language: LanguageId = 'plaintext';
   let modelSeq = 0;
@@ -186,6 +197,7 @@ export function createDiffEngine(): SideDiffEngine {
   }
 
   function editorFor(side: Side): CodeEditor | null {
+    if (single && singleEditor) return singleEditor;
     if (!diffEditor) return null;
     // Inline mode shows one editor (the modified one); both sides map to it.
     if (side === 'a' && options.viewMode === 'side-by-side') return diffEditor.getOriginalEditor();
@@ -196,7 +208,7 @@ export function createDiffEngine(): SideDiffEngine {
   function release(m: TextModel): void {
     if (m.isDisposed()) return;
     const cur = diffEditor?.getModel();
-    if (cur?.original === m || cur?.modified === m || attachScheduled) pendingDispose.push(m);
+    if (cur?.original === m || cur?.modified === m || singleEditor?.getModel() === m || attachScheduled) pendingDispose.push(m);
     else m.dispose();
   }
 
@@ -232,6 +244,12 @@ export function createDiffEngine(): SideDiffEngine {
     });
     // Item views are read-only; the DiffEditor does not pass readOnly on to the right-hand editor.
     diffEditor.getModifiedEditor().updateOptions({ ...sub, readOnly: view !== null });
+    singleEditor?.updateOptions({
+      ...sub,
+      wordWrap: mapped.wordWrap,
+      fontSize: mapped.fontSize,
+      readOnly: view !== null,
+    });
   }
 
   function measure(side: Side): void {
@@ -357,6 +375,7 @@ export function createDiffEngine(): SideDiffEngine {
     if (current?.original !== s.a || current?.modified !== s.b) {
       diffEditor.setModel({ original: s.a, modified: s.b });
     }
+    if (singleEditor && singleEditor.getModel() !== s.a) singleEditor.setModel(s.a);
     const keep = pendingDispose.filter((m) => m === s.a || m === s.b);
     for (const m of pendingDispose) if (!keep.includes(m) && !m.isDisposed()) m.dispose();
     pendingDispose = keep;
@@ -442,13 +461,14 @@ export function createDiffEngine(): SideDiffEngine {
   /** Ctrl+Z / Ctrl+Y in a focused pane: Monaco's own stack first, then the whole-text history. */
   function keyUndoRedo(action: 'undo' | 'redo'): void {
     if (!diffEditor) return;
-    const side: Side | null = diffEditor.getOriginalEditor().hasTextFocus()
+    const inSingle = singleEditor?.hasTextFocus() === true;
+    const side: Side | null = inSingle || diffEditor.getOriginalEditor().hasTextFocus()
       ? 'a'
       : diffEditor.getModifiedEditor().hasTextFocus()
         ? 'b'
         : null;
     if (!side) return;
-    const ed = side === 'a' ? diffEditor.getOriginalEditor() : diffEditor.getModifiedEditor();
+    const ed = inSingle && singleEditor ? singleEditor : side === 'a' ? diffEditor.getOriginalEditor() : diffEditor.getModifiedEditor();
     const model = ed.getModel();
     if (!model) return;
     const own = action === 'undo' ? model.canUndo() : model.canRedo();
@@ -459,6 +479,27 @@ export function createDiffEngine(): SideDiffEngine {
     // Item views are read-only; whole-text undo would change texts that are not on screen.
     if (view) return;
     undoOrRedo(action, side);
+  }
+
+  // --- single editor (browse mode) -----------------------------------------
+
+  function showSingle(on: boolean): void {
+    single = on;
+    if (!diffEditor || !hosts) return;
+    if (on && !singleEditor) {
+      singleEditor = monaco.editor.create(hosts.single, {
+        ...SINGLE_EDITOR_OPTIONS,
+        model: shown().a,
+      });
+      wireEditor('a', singleEditor);
+      applyEditorOptions();
+    }
+    hosts.diff.style.display = on ? 'none' : '';
+    hosts.single.style.display = on ? '' : 'none';
+    if (on && singleEditor) {
+      if (singleEditor.getModel() !== shown().a) singleEditor.setModel(shown().a);
+      singleEditor.layout();
+    } else diffEditor.layout();
   }
 
   // --- item views -----------------------------------------------------------
@@ -561,7 +602,7 @@ export function createDiffEngine(): SideDiffEngine {
 
   function step(dir: 1 | -1): void {
     const total = revealLines.length;
-    if (!diffEditor || total === 0) return;
+    if (!diffEditor || total === 0 || single) return;
     const cursor = diffEditor.getModifiedEditor().getPosition()?.lineNumber ?? 1;
     let index: number;
     if (position.index > 0 && cursor === placedLine) index = nextIndex(position.index, total, dir);
@@ -645,7 +686,18 @@ export function createDiffEngine(): SideDiffEngine {
   const engine: SideDiffEngine = {
     mount(container) {
       if (diffEditor) throw new Error('DiffEngine.mount: already mounted');
-      diffEditor = monaco.editor.createDiffEditor(container, {
+      // Two stacked hosts: the diff editor, and the plain editor of browse mode (setSingle).
+      if (getComputedStyle(container).position === 'static') container.style.position = 'relative';
+      const host = (): HTMLElement => {
+        const el = document.createElement('div');
+        el.style.cssText = 'position:absolute;inset:0;';
+        container.append(el);
+        return el;
+      };
+      hosts = { diff: host(), single: host() };
+      hosts.single.style.display = 'none';
+      hosts.single.dataset.sidediffSingle = '';
+      diffEditor = monaco.editor.createDiffEditor(hosts.diff, {
         ...BASE_EDITOR_OPTIONS,
         ...mapDiffOptions(options, effectiveDegraded()),
       });
@@ -669,6 +721,7 @@ export function createDiffEngine(): SideDiffEngine {
       );
       attachModels();
       beginWait();
+      if (single) showSingle(true);
     },
 
     setText(side, text) {
@@ -769,6 +822,11 @@ export function createDiffEngine(): SideDiffEngine {
       return history.canRedo(side);
     },
 
+    setSingle(on) {
+      if (on === single) return;
+      showSingle(on);
+    },
+
     openView(v) {
       openItemView(v);
     },
@@ -827,6 +885,7 @@ export function createDiffEngine(): SideDiffEngine {
 
     layout() {
       diffEditor?.layout();
+      singleEditor?.layout();
     },
 
     on(event, handler) {
@@ -847,8 +906,13 @@ export function createDiffEngine(): SideDiffEngine {
       unregisterController();
       for (const c of domCleanups.splice(0)) c();
       for (const d of disposables.splice(0)) d.dispose();
+      singleEditor?.dispose();
+      singleEditor = null;
       diffEditor?.dispose();
       diffEditor = null;
+      hosts?.diff.remove();
+      hosts?.single.remove();
+      hosts = null;
       attachScheduled = false;
       history.clear();
       if (view) {
