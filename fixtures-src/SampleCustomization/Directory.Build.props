@@ -1,0 +1,6 @@
+<Project>
+  <!-- Keep build intermediates out of the repo (set before the SDK is imported). -->
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>$([System.IO.Path]::GetTempPath())sidediff-test-dll/obj/</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>
