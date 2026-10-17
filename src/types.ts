@@ -506,6 +506,8 @@ export interface SideDiffHooks {
   engine: DiffEngine;
   registry: LanguageRegistry;
   project?: ProjectIndexer;
+  packages?: PackageReader;
+  assemblies?: AssemblyBrowser;
 }
 
 declare global {

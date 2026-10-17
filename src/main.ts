@@ -14,7 +14,7 @@ try {
   // JSON and SQL views use their packs once installed.
   const project = createProjectIndexer({ languageAvailable: (id) => registry.get(id)?.installed === true });
   const packages = createPackageReader();
-  window.__sidediff = { engine, registry, project };
+  window.__sidediff = { engine, registry, project, packages };
   createApp({ root, engine, registry, project, packages, views: engine, history: engine });
 } catch (err) {
   root.textContent = `SideDiff failed to start: ${err instanceof Error ? err.message : String(err)}`;
