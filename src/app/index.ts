@@ -730,9 +730,10 @@ async function startApp({ root, engine, registry, project, views, history, packa
     if (seq !== openSeq) return; // a newer open (or Back) won
     current = { item, view: kind };
     clearRendered();
-    views.openView({ key: `${item.id}#${kind.id}`, a, b, language });
+    // A search hit opens at its line (browse shows only A, so the line is on A there).
+    const reveal = extra.line ? { side: mode === 'browse' ? 'a' as const : (extra.side ?? 'a'), line: extra.line } : undefined;
+    views.openView({ key: `${item.id}#${kind.id}`, a, b, language, ...(reveal ? { reveal } : {}) });
     selectLang.value = language;
-    // extra.line: jumping to the hit's line inside an item view needs an engine API (requested in STATUS.md).
     explorer.setActive(item.id);
     renderItemBar();
     if (!quiet) {

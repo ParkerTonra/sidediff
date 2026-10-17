@@ -264,6 +264,10 @@ export function createFakeEngine(): FakeEngine {
       fake.calls.push(`openView:${v.key}`);
       view = v;
       renderAreas();
+      if (v.reveal) {
+        fake.calls.push(`reveal:${v.reveal.side}:${v.reveal.line}`);
+        scrollTo(v.reveal.line);
+      }
       emit('view', { key: v.key });
       schedule();
     },
