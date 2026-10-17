@@ -134,6 +134,8 @@ export interface ItemView {
   a: string | null;
   b: string | null;
   language: LanguageId;
+  /** Once the view is shown, centre and select this 1-based line of `side` (search hits). */
+  reveal?: { side: Side; line: number };
 }
 
 export interface ItemViewApi {
