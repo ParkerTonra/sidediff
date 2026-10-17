@@ -19,19 +19,6 @@ export interface OracleItem {
 }
 
 /**
- * Indexer changes the QA sidecar hasn't caught up with yet; each entry names
- * the change. Remove an entry once QA regenerates the fixture.
- */
-export function applyPendingSidecarChanges(items: OracleItem[]): void {
-  for (const it of items) {
-    // CSAttribute gained a structured summary (allowed values), so Summary is listed first.
-    if (it.element === 'CSAttribute' && it.views.includes('summary') && it.views[0] !== 'summary') {
-      it.views = ['summary', ...it.views.filter((v) => v !== 'summary')];
-    }
-  }
-}
-
-/**
  * Field-by-field differences, empty when everything matches. The 'summary'
  * view is compared only when the sidecar lists it; 'ranges' covers a and b.
  */

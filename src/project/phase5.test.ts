@@ -9,7 +9,7 @@ import { createProjectIndexer, type WorkerLike } from './index';
 import { buildSummary } from './summary';
 import { createWorkerCore } from './worker-core';
 import { existsSync, readFileSync } from 'node:fs';
-import { applyPendingSidecarChanges, oracleDiffs, type OracleItem } from './oracle-helper';
+import { oracleDiffs, type OracleItem } from './oracle-helper';
 
 const deflate64 = (s: string): string => deflateRawSync(Buffer.from(s, 'utf8')).toString('base64');
 const proj = (body: string) => `<Customization level="0" product-version="24.200.0001">\r\n${body}\r\n</Customization>`;
@@ -554,25 +554,6 @@ describe.skipIf(!existsSync('fixtures/package-a.zip'))('package fixture pair vs 
     const b = await reader.open(blob(new Uint8Array(readFileSync('fixtures/package-b.zip'))), 'package-b.zip');
     const { ix, idx } = await indexed(a, b);
 
-    // Open with QA: a File element that points at a DLL or image is grouped by
-    // kind (assemblies / images), like unreferenced zip files. Real packages
-    // reference every DLL and image through File elements, so grouping them
-    // under Files would leave those groups empty. Adjust the sidecar to match.
-    const regroup = (it: OracleItem): string | null =>
-      it.element !== 'File' ? null : /\.(dll|exe)$/i.test(it.id) ? 'assemblies' : /\.(png|jpe?g|gif|svg|ico|bmp|webp)$/i.test(it.id) ? 'images' : null;
-    for (const it of oracle.items) {
-      const g = regroup(it);
-      if (!g) continue;
-      for (const side of it.sides ?? []) {
-        const c = oracle.overview[side].counts;
-        c[it.group] = (c[it.group] ?? 0) - 1;
-        if (c[it.group] === 0) delete c[it.group];
-        c[g] = (c[g] ?? 0) + 1;
-      }
-      it.group = g;
-    }
-
-    applyPendingSidecarChanges(oracle.items);
     expect(oracleDiffs(idx.items, oracle.items)).toEqual([]);
     expect(idx.items).toHaveLength(oracle.counts.total);
     expect(idx.counts).toEqual(oracle.counts.byStatus);
