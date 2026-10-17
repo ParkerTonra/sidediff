@@ -29,7 +29,7 @@ function factsTable(a: ItemSummary | null, b: ItemSummary | null, compare: boole
   if (keys.length === 0) return null;
   const val = (s: ItemSummary | null, k: string): string | undefined => s?.facts.find(([kk]) => kk === k)?.[1];
   return h('table', { class: 'sum-table sum-facts' },
-    compare ? h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, ''), h('th', { scope: 'col' }, labels.a), h('th', { scope: 'col' }, labels.b))) : null,
+    compare ? h('thead', {}, h('tr', {}, h('td', {}), h('th', { scope: 'col' }, labels.a), h('th', { scope: 'col' }, labels.b))) : null,
     h('tbody', {}, ...keys.map((k) => {
       const va = val(a, k);
       const vb = val(b, k);
@@ -191,7 +191,7 @@ export function renderOverview(ov: Record<Side, PackageOverview | null>, mode: A
     ['Description', (o) => o.attributes.description || '—'],
   ];
   const facts = h('table', { class: 'sum-table sum-facts' },
-    compare ? h('thead', {}, h('tr', {}, h('th', {}, ''), ...sides.map((s) => h('th', { scope: 'col' }, labels[s])))) : null,
+    compare ? h('thead', {}, h('tr', {}, h('td', {}), ...sides.map((s) => h('th', { scope: 'col' }, labels[s])))) : null,
     h('tbody', {}, ...factRows.map(([k, f]) => {
       const vals = sides.map((s) => (ov[s] ? f(ov[s] as PackageOverview) : '—'));
       const differs = compare && vals[0] !== vals[1] && k !== 'File' && k !== 'Size';
@@ -201,13 +201,13 @@ export function renderOverview(ov: Record<Side, PackageOverview | null>, mode: A
   const groups = [...new Set(sides.flatMap((s) => Object.keys(ov[s]?.counts ?? {})))] as ProjectGroup[];
   const order = Object.keys(GROUP_LABELS) as ProjectGroup[];
   groups.sort((x, y) => order.indexOf(x) - order.indexOf(y));
-  const counts = h('div', { class: 'ov-groups', role: 'list' }, ...groups.map((g) => {
+  const counts = h('ul', { class: 'ov-groups', 'aria-label': 'Items by group' }, ...groups.map((g) => {
     const n = sides.map((s) => ov[s]?.counts[g] ?? 0);
     const differs = compare && n[0] !== n[1];
-    const btn = h('button', { type: 'button', class: `ov-group${differs ? ' is-diff' : ''}`, role: 'listitem', 'data-group': g, title: `Show ${GROUP_LABELS[g]} in the explorer${differs ? ' (counts differ)' : ''}` },
+    const btn = h('button', { type: 'button', class: `ov-group${differs ? ' is-diff' : ''}`, 'data-group': g, title: `Show ${GROUP_LABELS[g]} in the explorer${differs ? ' (counts differ)' : ''}` },
       differs ? glyph('modified') : '', h('span', { class: 'ov-n' }, compare ? `${fmt(n[0] ?? 0)} / ${fmt(n[1] ?? 0)}` : fmt(n[0] ?? 0)), h('span', {}, GROUP_LABELS[g]));
     btn.addEventListener('click', () => on.group(g));
-    return btn;
+    return h('li', {}, btn);
   }));
 
   const list = (title: string, side: Side, entries: { label: string; detail: string; onClick: () => void }[]): HTMLElement =>

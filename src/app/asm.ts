@@ -64,7 +64,10 @@ export function createAssemblyView(o: AsmViewOptions): Rendered {
   let selected: string | null = null;
   let disposed = false;
 
-  const status = h('p', { class: 'asm-status muted', role: 'status' }, 'Reading metadata…');
+  // Visible only: its text ticks every second while decompiling, so it is not a live region.
+  // Start, finish and errors are announced once through o.announce.
+  const status = h('p', { class: 'asm-status muted' }, 'Reading metadata…');
+  const hitsCount = h('span', { class: 'muted asm-hits-count', hidden: true });
   const header = h('div', { class: 'asm-head' });
   const search = h('input', { type: 'search', class: 'ex-filter asm-search', 'data-testid': 'asm-search', placeholder: 'Search types, members and strings…', 'aria-label': 'Search this assembly', spellcheck: 'false', autocomplete: 'off' });
   const btnOutline = h('button', { type: 'button', class: 'btn small', 'data-testid': 'btn-asm-outline', title: 'Diff the type and member outline of both versions', hidden: !compare }, 'Compare outlines');
@@ -73,7 +76,7 @@ export function createAssemblyView(o: AsmViewOptions): Rendered {
   const tree = h('div', { class: 'asm-tree', role: 'tree', 'aria-label': 'Namespaces and types', tabindex: 0 });
   const detail = h('div', { class: 'asm-detail', 'data-testid': 'asm-detail' }, h('p', { class: 'muted' }, 'Pick a type on the left.'));
   const el = h('div', { class: 'rendered asm-view', 'data-testid': 'assembly-view' },
-    header, h('div', { class: 'asm-tools' }, search, btnOutline, btnAll, allHint), status,
+    header, h('div', { class: 'asm-tools' }, search, hitsCount, btnOutline, btnAll, allHint), status,
     h('div', { class: 'asm-body' }, tree, detail));
 
   const typesBy = (side: Side): Map<string, AsmType> => new Map((info[side]?.types ?? []).map((t) => [t.fullName, t]));
@@ -87,6 +90,9 @@ export function createAssemblyView(o: AsmViewOptions): Rendered {
   }
 
   function renderTree(): void {
+    tree.setAttribute('role', 'tree');
+    tree.setAttribute('aria-label', 'Namespaces and types');
+    hitsCount.hidden = true;
     const ta = typesBy('a');
     const tb = compare ? typesBy('b') : new Map<string, AsmType>();
     const names = [...new Set([...ta.keys(), ...tb.keys()])].sort();
@@ -202,7 +208,9 @@ export function createAssemblyView(o: AsmViewOptions): Rendered {
       return r;
     } catch (err) {
       if (seq !== decompileSeq || disposed) return null;
+      const lostFocus = document.activeElement === document.body;
       stopBusy();
+      if (lostFocus) button?.focus();
       status.textContent = `Decompiler unavailable: ${err instanceof Error ? err.message : String(err)}. IL is still available per method.`;
       o.announce(status.textContent);
       return null;
@@ -251,13 +259,20 @@ export function createAssemblyView(o: AsmViewOptions): Rendered {
     const res = await Promise.all(sides.map((s) => (info[s] ? o.browser.search(keyOf(s), q, { limit: 200 }).then((hits) => hits.map((x) => ({ side: s, x }))) : Promise.resolve([]))));
     if (seq !== searchSeq || disposed) return;
     const hits = res.flat() as { side: Side; x: AsmSearchHit }[];
-    tree.replaceChildren(h('p', { class: 'muted asm-hits-count', role: 'status' }, `${fmt(hits.length)} match${hits.length === 1 ? '' : 'es'}`), ...hits.map(({ side, x }) => {
+    const count = `${fmt(hits.length)} match${hits.length === 1 ? '' : 'es'}`;
+    hitsCount.textContent = count;
+    hitsCount.hidden = false;
+    o.announce(count);
+    // Search results are a plain list of buttons, not tree items.
+    tree.setAttribute('role', 'list');
+    tree.setAttribute('aria-label', 'Search results');
+    tree.replaceChildren(...hits.map(({ side, x }) => {
       const b = h('button', { type: 'button', class: 'asm-hit', 'data-testid': 'asm-hit', 'data-kind': x.kind },
         h('span', { class: `asm-hit-kind k-${x.kind}` }, x.kind), compare ? h('span', { class: 'muted' }, ` ${o.labels[side]}`) : '',
         h('span', { class: 'asm-hit-where' }, `${x.typeFullName.split('.').pop() ?? x.typeFullName}${x.memberName ? `.${x.memberName}` : ''}`),
         h('code', { class: 'asm-hit-preview' }, x.preview));
       b.addEventListener('click', () => select(x.typeFullName, x.memberName));
-      return b;
+      return h('div', { role: 'listitem' }, b);
     }));
   }
   let searchTimer: ReturnType<typeof setTimeout> | undefined;

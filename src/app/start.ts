@@ -8,6 +8,8 @@ export interface StartHost {
   hints: Record<Side, HTMLElement>;
   /** Where the hints live when the start screen is not shown. */
   hintHome: HTMLElement;
+  /** Made inert while the start screen covers it, so Tab reaches the start zones instead. */
+  editor: HTMLElement;
   pick(side: Side, mode: AppMode): void;
   dismiss(): void;
 }
@@ -100,8 +102,13 @@ export function createStartScreen(host: StartHost): StartScreen {
     show(on) {
       if (on === !el.hidden) return;
       el.hidden = !on;
-      if (on) moveIn();
-      else moveOut();
+      host.editor.inert = on;
+      if (on) {
+        moveIn();
+        // Cold start, or focus was in the (now inert) editor: start from the first zone.
+        const active = document.activeElement;
+        if (!active || active === document.body || host.editor.contains(active)) browseZone.focus();
+      } else moveOut();
     },
   };
 }

@@ -204,6 +204,7 @@ async function startApp({ root, engine, registry, project, views, history, packa
   const startScreen = createStartScreen({
     hints: { a: panes.a.hint, b: panes.b.hint },
     hintHome: editorWrap,
+    editor: editorEl,
     pick: (side, m) => {
       setMode(m);
       panes[side].file.click();
@@ -1039,6 +1040,8 @@ async function startApp({ root, engine, registry, project, views, history, packa
       asmBar.hidden = false;
       asmBarTitle.textContent = title;
       asmCodeShown = true;
+      // The clicked button is gone with the hidden browser: put focus in the code.
+      engine.focus(mode === 'compare' && a === null ? 'b' : 'a');
       announce(`${title}. Esc returns to the assembly browser.`);
     });
   }
@@ -1049,6 +1052,8 @@ async function startApp({ root, engine, registry, project, views, history, packa
     renderHost.hidden = false;
     asmBar.hidden = true;
     asmCodeShown = false;
+    // Return focus to where the user was in the browser: the selected type, else Decompile.
+    renderHost.querySelector<HTMLElement>('.asm-type.is-active, [data-testid="btn-decompile"]')?.focus();
     announce('Back to the assembly browser');
   }
   btnAsmBrowser.addEventListener('click', showAsmBrowser);
