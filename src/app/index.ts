@@ -6,6 +6,8 @@ import {
   CONTEXT_LINES_MAX,
   CONTEXT_LINES_MIN,
   type AppDeps,
+  type AppMode,
+  type PackageSource,
   type AppSettings,
   type ChangePosition,
   type DegradedInfo,
@@ -24,12 +26,19 @@ import { FONT_SIZE_MAX, FONT_SIZE_MIN, LABEL_MAX_LENGTH, clamp, createSettingsSt
 import { fmt, h, isTextTarget } from './dom';
 import { GROUP_LABELS, changedCount, createExplorer, glyph, statusWord } from './explorer';
 import { fuzzyItem } from './fuzzy';
+import { createAssemblyView } from './asm';
+import { formatSize, renderBinary, renderImage, renderOverview, renderSummary, type Rendered } from './render';
+import { createSearchPanel, type OpenHit } from './search';
+import { createStartScreen } from './start';
 
 const SIDES: readonly Side[] = ['a', 'b'];
 const DETECT_SAMPLE = 8 * 1024;
 const REINDEX_DELAY_MS = 400;
 const QUICK_OPEN_LIMIT = 60;
 const ITEM_LOADING_DELAY_MS = 150;
+/** Item views the UI renders itself; the editor shows an empty view underneath. */
+const RENDERED_VIEWS: ReadonlySet<ItemViewKind['id']> = new Set(['summary', 'image', 'binary', 'assembly']);
+const FILE_ELEMENTS: ReadonlySet<string> = new Set(['File', 'PerTenantFile', 'Zip']);
 const SHORTCUTS: ReadonlyArray<[string, string]> = [
   ['F7 / Alt+↓', 'Next change'],
   ['Shift+F7 / Alt+↑', 'Previous change'],
@@ -38,6 +47,8 @@ const SHORTCUTS: ReadonlyArray<[string, string]> = [
   ['?', 'Show this cheat sheet'],
   ['Ctrl+M', 'Toggle Tab focus mode (Tab moves focus out of the editor)'],
   ['Ctrl+Z / Ctrl+Y', 'Undo / redo a paste, clear, file load or swap (outside the editor, or when its own undo is empty)'],
+  ['Ctrl+O', 'Open a package or file'],
+  ['Ctrl+Shift+F', 'Search everywhere (items, files, loaded assemblies)'],
   ['Ctrl+B', 'Show or hide the project explorer'],
   ['Ctrl+P', 'Quick open a project item'],
   ['Alt+← / Esc', 'Back from an item to the whole project'],
@@ -63,13 +74,16 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-async function startApp({ root, engine, registry, project, views, history }: AppDeps): Promise<void> {
+async function startApp({ root, engine, registry, project, views, history, packages, assemblies }: AppDeps): Promise<void> {
   // 1. Settings first, and the theme before anything paints.
   const store = createSettingsStore();
   const settings: AppSettings = store.load();
   const save = (): void => store.save(settings);
   const explorerSettings = (settings.explorer ??= { ...DEFAULT_EXPLORER });
   applyThemeAttr(settings.theme);
+  // Compare is the default: it is the original workflow, and every Phase 1-4 test runs in it.
+  let mode: AppMode = settings.mode ?? 'compare';
+  root.dataset.mode = mode;
 
   let ready = false;
   let position: ChangePosition = { index: 0, total: 0 };
@@ -100,10 +114,17 @@ async function startApp({ root, engine, registry, project, views, history }: App
     'aria-controls': 'sd-explorer', title: 'Project explorer (Ctrl+B)', hidden: true,
   }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), h('span', { class: 'ex-icon', 'aria-hidden': 'true' }, '☰'), explorerSummary);
 
+  // Context lines only matter with "diff only" on, so the field appears next to it then.
+  const contextField = h('label', { for: 'sd-context', class: 'field', title: 'Unchanged lines kept around each change in “diff only”' }, 'Context', inputContext);
+  const btnMode = h('button', { type: 'button', class: 'btn btn-mode', 'data-testid': 'btn-mode' });
+  const btnSearch = h('button', { type: 'button', class: 'btn', 'data-testid': 'btn-search', title: 'Search everywhere (Ctrl+Shift+F)', 'aria-label': 'Search everywhere', hidden: true }, '⌕');
+
   const toolbar = h('div', { class: 'toolbar', role: 'toolbar', 'aria-label': 'Diff controls' },
     h('span', { class: 'brand' }, 'SideDiff'),
+    btnMode,
     btnExplorer,
-    group(btnDiffOnly, h('label', { for: 'sd-context', class: 'field' }, 'Context', inputContext)),
+    btnSearch,
+    group(btnDiffOnly, contextField),
     group(btnPrev, changePos, btnNext),
     // The selects' values are self-describing; their captions stay for screen readers.
     group(h('label', { for: 'sd-view', class: 'visually-hidden' }, 'View'), selectView, h('label', { for: 'sd-lang', class: 'visually-hidden' }, 'Language'), selectLang),
@@ -145,6 +166,7 @@ async function startApp({ root, engine, registry, project, views, history }: App
     btnClear.addEventListener('click', () => {
       if (!ready) return;
       // Focus stays on the button, so Ctrl+Z right away undoes the clear.
+      for (let i = recentPkgs.length - 1; i >= 0; i--) if (recentPkgs[i]?.side === side && recentPkgs[i]?.pkg.projectXml === null) recentPkgs.splice(i, 1);
       replaceText(side, '', 'clear');
     });
     label.addEventListener('input', () => {
@@ -176,8 +198,32 @@ async function startApp({ root, engine, registry, project, views, history }: App
   const itemLoadingText = h('span', {});
   const itemLoading = h('div', { class: 'item-loading', 'data-testid': 'item-loading', hidden: true },
     h('span', { class: 'spinner', 'aria-hidden': 'true' }), itemLoadingText);
-  const editorWrap = h('div', { class: 'editor-wrap' }, editorEl, panes.a.hint, panes.b.hint, missing.a, missing.b, panes.a.drop, panes.b.drop, itemLoading);
+  // Rendered views (summary, image, binary, assembly, overview) sit over the editor.
+  const renderHost = h('div', { class: 'render-host', 'data-testid': 'render-host', hidden: true });
+  const editorWrap = h('div', { class: 'editor-wrap' }, editorEl, panes.a.hint, panes.b.hint, missing.a, missing.b, panes.a.drop, panes.b.drop, renderHost, itemLoading);
+  const startScreen = createStartScreen({
+    hints: { a: panes.a.hint, b: panes.b.hint },
+    hintHome: editorWrap,
+    pick: (side, m) => {
+      setMode(m);
+      panes[side].file.click();
+    },
+    dismiss: () => {
+      startDismissed = true;
+      renderEmpty();
+      engine.focus('a');
+    },
+  });
+  editorWrap.append(startScreen.el);
+  // Shown while decompiled C# or IL fills the editor, with a way back to the browser.
+  const asmBarTitle = h('span', { class: 'asm-bar-title' });
+  const btnAsmBrowser = h('button', { type: 'button', class: 'btn small', 'data-testid': 'btn-asm-browser', title: 'Back to the assembly browser (Esc)' }, '← Assembly browser');
+  const asmBar = h('div', { class: 'asm-bar', hidden: true }, btnAsmBrowser, asmBarTitle, h('span', { class: 'muted' }, 'read-only'));
   addDropTarget(editorWrap, (e) => {
+    const zone = (e.target as Element | null)?.closest?.('[data-drop-side]');
+    if (zone instanceof HTMLElement && zone.dataset.dropSide === 'b') return 'b';
+    if (zone instanceof HTMLElement) return 'a';
+    if (mode === 'browse') return 'a';
     if (settings.diff.viewMode === 'inline') return 'b';
     const rect = editorWrap.getBoundingClientRect();
     return e.clientX < rect.left + rect.width / 2 ? 'a' : 'b';
@@ -193,9 +239,11 @@ async function startApp({ root, engine, registry, project, views, history }: App
   const progress = h('div', { class: 'progress', 'data-testid': 'progress', 'data-state': 'idle', role: 'status', 'aria-live': 'polite' },
     h('span', { class: 'spinner', 'aria-hidden': 'true' }), progressText);
   const notice = h('span', { class: 'notice', role: 'status', 'aria-live': 'polite' });
+  // Browse mode: package facts instead of diff stats.
+  const statPackage = h('span', { class: 'stat-package', 'data-testid': 'stat-package' });
   const statsBar = h('footer', { class: 'stats-bar', 'data-testid': 'stats-bar' },
     h('span', { class: 'stat-labels' }, panes.a.statLabel, h('span', { class: 'vs' }, 'vs'), panes.b.statLabel),
-    statAdded, statRemoved, statModified, statChanges, statNote, progress, h('span', { class: 'spacer' }), notice);
+    statAdded, statRemoved, statModified, statChanges, statNote, statPackage, progress, h('span', { class: 'spacer' }), notice);
 
   const shortcutsDialog = h('dialog', { class: 'dialog', 'data-testid': 'shortcuts-dialog', 'aria-labelledby': 'sd-shortcuts-title' },
     h('h2', { id: 'sd-shortcuts-title' }, 'Keyboard shortcuts'),
@@ -223,9 +271,11 @@ async function startApp({ root, engine, registry, project, views, history }: App
   const relatedBox = h('span', { class: 'item-related', 'data-testid': 'item-related', role: 'group', 'aria-label': 'Related items of this screen', hidden: true });
   const btnPrevItem = h('button', { type: 'button', class: 'btn small', 'data-testid': 'btn-prev-item', 'aria-label': 'Previous item', title: 'Previous item (Alt+PageUp)' }, '‹');
   const btnNextItem = h('button', { type: 'button', class: 'btn small', 'data-testid': 'btn-next-item', 'aria-label': 'Next item', title: 'Next item (Alt+PageDown)' }, '›');
+  const btnDownload = h('button', { type: 'button', class: 'btn small', 'data-testid': 'btn-download', hidden: true }, '⤓ Download');
+  const btnDownloadB = h('button', { type: 'button', class: 'btn small', 'data-testid': 'btn-download-b', hidden: true }, '⤓ B');
   const itemBar = h('nav', { class: 'item-bar', 'data-testid': 'item-bar', 'aria-label': 'Item breadcrumb', hidden: true },
     btnBack, h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '/'), crumbGroup, h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '/'),
-    crumbStatus, crumbName, crumbDetail, viewSwitch, relatedBox, h('span', { class: 'spacer' }), btnShowInProject, btnPrevItem, itemPos, btnNextItem);
+    crumbStatus, crumbName, crumbDetail, viewSwitch, relatedBox, h('span', { class: 'spacer' }), btnDownload, btnDownloadB, btnShowInProject, btnPrevItem, itemPos, btnNextItem);
 
   // ---------- quick open ----------
   const qoInput = h('input', {
@@ -251,11 +301,21 @@ async function startApp({ root, engine, registry, project, views, history }: App
     open: views ? (item) => void openItem(item) : null,
   });
   explorer.drawer.id = 'sd-explorer';
-  const mainCol = h('div', { class: 'main-col' }, itemBar, paneRow, degradedBanner, errorBanner, editorWrap);
+  const mainCol = h('div', { class: 'main-col' }, itemBar, paneRow, degradedBanner, errorBanner, asmBar, editorWrap);
   const workspace = h('div', { class: 'workspace' }, explorer.drawer, explorer.splitter, mainCol);
 
   root.classList.add('sd-app');
-  root.replaceChildren(announcer, toolbar, workspace, statsBar, toast, shortcutsDialog, addLangDialog, quickOpen);
+  const searchPanel = project?.search ? createSearchPanel({
+    project,
+    ...(assemblies ? { assemblies } : {}),
+    items: () => index?.items ?? [],
+    mode: () => mode,
+    labels: () => settings.labels,
+    loadedAssemblies: () => loadedAsm,
+    loadAllAssemblies,
+    open: (hit) => void openHit(hit),
+  }) : null;
+  root.replaceChildren(announcer, toolbar, workspace, statsBar, toast, shortcutsDialog, addLangDialog, quickOpen, ...(searchPanel ? [searchPanel.dialog] : []));
 
   // ---------- rendering ----------
   function renderLabels(syncInputs: boolean): void {
@@ -277,6 +337,7 @@ async function startApp({ root, engine, registry, project, views, history }: App
   function renderOptions(): void {
     const d = settings.diff;
     btnDiffOnly.setAttribute('aria-pressed', String(d.diffOnly));
+    contextField.hidden = !d.diffOnly;
     inputContext.value = String(d.contextLines);
     optTrim.input.checked = d.ignoreTrimWhitespace;
     optAllWs.input.checked = d.ignoreAllWhitespace;
@@ -311,7 +372,10 @@ async function startApp({ root, engine, registry, project, views, history }: App
     btnPrev.disabled = btnNext.disabled = total === 0;
   }
 
+  let lastStats: DiffStats | null = null;
   function renderStats(s: DiffStats | null): void {
+    lastStats = s;
+    renderPackageFacts();
     const set = (el: HTMLElement, n: number, text: string): void => {
       el.dataset.value = String(n);
       el.textContent = text;
@@ -325,8 +389,12 @@ async function startApp({ root, engine, registry, project, views, history }: App
     else statNote.textContent = `${(s.computeMs / 1000).toFixed(2)} s${s.quitEarly ? ' · approximate (time limit hit)' : ''}`;
   }
 
+  let startDismissed = false;
   function renderEmpty(): void {
     for (const side of SIDES) panes[side].hint.hidden = !empty[side] || current !== null;
+    const bothEmpty = empty.a && (mode === 'browse' || empty.b);
+    if (!bothEmpty) startDismissed = false;
+    startScreen.show(bothEmpty && !startDismissed && current === null && !overviewOpen);
   }
 
   function renderDegraded(info: DegradedInfo | null): void {
@@ -403,18 +471,63 @@ async function startApp({ root, engine, registry, project, views, history }: App
     if (id && id !== settings.language) void applyLanguage(id, 'detected');
   }
 
+  /** Recently opened packages; a side uses the one whose project.xml equals its text (survives undo, swap). */
+  const recentPkgs: { side: Side; pkg: PackageSource }[] = [];
+  /** The package just opened: the first index that includes it opens its overview. */
+  let overviewFor: PackageSource | null = null;
+
   async function loadFile(side: Side, file: File): Promise<void> {
     if (!ready) return;
+    if (mode === 'browse') side = 'a';
     let text: string;
     try {
-      text = await file.text();
+      if (packages) {
+        const pkg = await packages.open(file, file.name);
+        recentPkgs.push({ side, pkg });
+        if (recentPkgs.length > 6) recentPkgs.shift();
+        text = pkg.projectXml ?? '';
+        overviewFor = pkg;
+        const files = pkg.entries.length ? ` · ${fmt(pkg.entries.length)} files` : '';
+        showNotice(`Opened ${pkg.name} in ${settings.labels[side]} (${formatBytes(file.size)}${files})`);
+        if (pkg.kind === 'zip' && pkg.projectXml === null) showToast(`${pkg.name} has no project.xml; showing its files only`);
+      } else {
+        text = await file.text();
+        showNotice(`Loaded ${file.name} into ${settings.labels[side]} (${formatBytes(file.size)})`);
+      }
     } catch (err) {
-      showNotice(`Could not read ${file.name}: ${errorText(err)}`, 'error');
+      showNotice(`Could not open ${file.name}: ${errorText(err)}`, 'error');
+      showToast(`Could not open ${file.name}: ${errorText(err)}`);
       return;
     }
     replaceText(side, text, 'load');
-    detectFrom(text);
-    showNotice(`Loaded ${file.name} into ${settings.labels[side]} (${formatBytes(file.size)})`);
+    if (text) detectFrom(text);
+    scheduleIndex();
+  }
+
+  /** Routes dropped or picked files: browse → A; compare → two files fill A and B, one fills the empty side. */
+  function loadFiles(files: File[], preferred?: Side): void {
+    const [f1, f2] = files;
+    if (!f1) return;
+    if (mode === 'browse') {
+      void loadFile('a', f1);
+    } else if (f2) {
+      void loadFile('a', f1);
+      void loadFile('b', f2);
+    } else {
+      void loadFile(preferred ?? (empty.a ? 'a' : empty.b ? 'b' : 'a'), f1);
+    }
+  }
+
+  function packageFor(side: Side): PackageSource | undefined {
+    const text = engine.getText(side);
+    const norm = (x: string): string => x.replace(/\r\n/g, '\n');
+    for (let i = recentPkgs.length - 1; i >= 0; i--) {
+      const r = recentPkgs[i];
+      if (!r) continue;
+      const xml = r.pkg.projectXml;
+      if (xml === null ? r.side === side && text === '' : xml === text || (xml.length === text.length && norm(xml) === norm(text))) return r.pkg;
+    }
+    return undefined;
   }
 
   async function copySide(side: Side): Promise<void> {
@@ -474,19 +587,22 @@ async function startApp({ root, engine, registry, project, views, history }: App
   let index: ProjectIndex | null = null;
   let current: { item: ProjectItem; view: ItemViewKind } | null = null;
   const fullMeta: Record<Side, string> = { a: 'empty', b: 'empty' };
-  const isProject = (): boolean => !!index && (index.sides.a.isProject || index.sides.b.isProject);
+  const isProject = (): boolean => !!index && (index.sides.a.isProject || index.sides.b.isProject || index.items.length > 0);
 
   function renderExplorerChrome(): void {
     const on = isProject();
     btnExplorer.hidden = !on;
+    btnSearch.hidden = !on || !searchPanel;
     const open = on && explorerSettings.open;
     explorer.drawer.hidden = !open;
     explorer.splitter.hidden = !open;
     btnExplorer.setAttribute('aria-pressed', String(open));
     if (index && on) {
       const changed = changedCount(index);
-      explorerSummary.textContent = `${fmt(index.items.length)} items · ${fmt(changed)} changed`;
-      btnExplorer.setAttribute('aria-label', `Project explorer: ${fmt(index.items.length)} items, ${fmt(changed)} changed`);
+      // Browse has no statuses, so only the item count.
+      const changedText = mode === 'compare' ? ` · ${fmt(changed)} changed` : '';
+      explorerSummary.textContent = `${fmt(index.items.length)} items${changedText}`;
+      btnExplorer.setAttribute('aria-label', `Project explorer: ${fmt(index.items.length)} items${mode === 'compare' ? `, ${fmt(changed)} changed` : ''}`);
     }
   }
 
@@ -513,9 +629,13 @@ async function startApp({ root, engine, registry, project, views, history }: App
     if (!project) return;
     setIndexing(true);
     let next: ProjectIndex;
+    let pa: PackageSource | undefined;
+    let pb: PackageSource | undefined;
     try {
       performance.mark('sidediff:index-start');
-      next = await project.index(engine.getText('a'), engine.getText('b'));
+      pa = packageFor('a');
+      pb = mode === 'compare' ? packageFor('b') : undefined;
+      next = await project.index(engine.getText('a'), mode === 'compare' ? engine.getText('b') : '', { ...(pa ? { a: pa } : {}), ...(pb ? { b: pb } : {}) });
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return; // a newer call owns the spinner
       setIndexing(false);
@@ -527,7 +647,15 @@ async function startApp({ root, engine, registry, project, views, history }: App
     index = next;
     explorer.setIndex(isProject() ? next : null);
     renderExplorerChrome();
+    renderStats(lastStats);
     performance.mark('sidediff:explorer-rendered');
+    if (overviewOpen) {
+      if (isProject()) openOverview(true);
+      else closeOverview();
+    } else if (overviewFor && (overviewFor === pa || overviewFor === pb)) {
+      if (isProject() && project.overview && !current) openOverview();
+      overviewFor = null;
+    }
     if (!current) return;
     const id = current.item.id;
     const still = isProject() ? next.items.find((i) => i.id === id) : undefined;
@@ -542,11 +670,12 @@ async function startApp({ root, engine, registry, project, views, history }: App
 
   let openSeq = 0;
   let loadingTimer: ReturnType<typeof setTimeout> | undefined;
-  async function openItem(item: ProjectItem, viewId?: ItemViewKind['id'], quiet = false): Promise<void> {
+  async function openItem(item: ProjectItem, viewId?: ItemViewKind['id'], quiet = false, extra: Partial<Pick<OpenHit, 'asm' | 'line' | 'side'>> = {}): Promise<void> {
     if (!views || !project || !ready) return;
     const kind = item.views.find((v) => v.id === viewId) ?? item.views[0];
     if (!kind) return;
     const seq = ++openSeq;
+    if (overviewOpen) closeOverview(true);
     // viewText may decode (Page sources are base64 raw-deflate): show a small loading state only if it is slow.
     clearTimeout(loadingTimer);
     loadingTimer = setTimeout(() => {
@@ -560,11 +689,33 @@ async function startApp({ root, engine, registry, project, views, history }: App
       clearTimeout(loadingTimer);
       itemLoading.hidden = true;
     };
+    if (RENDERED_VIEWS.has(kind.id)) {
+      let r: Rendered;
+      try {
+        r = await renderItemView(item, kind, extra);
+      } catch (err) {
+        done();
+        if (seq === openSeq) showToast(`Could not open ${item.name}: ${errorText(err)}`);
+        return;
+      }
+      done();
+      if (seq !== openSeq) {
+        r.dispose();
+        return;
+      }
+      current = { item, view: kind };
+      views.openView({ key: `${item.id}#${kind.id}`, a: item.a ? '' : null, b: mode === 'compare' && item.b ? '' : null, language: 'plaintext' });
+      showRendered(r);
+      explorer.setActive(item.id);
+      renderItemBar();
+      if (!quiet) announce(`Opened ${item.name}, ${kind.label} view.${mode === 'compare' ? ` ${statusWord(item.status, settings.labels)}.` : ''} Alt+Left to go back.`);
+      return;
+    }
     let language = kind.language;
     let a: string | null;
     let b: string | null;
     try {
-      [a, b] = await Promise.all([project.viewText(item.id, kind.id, 'a'), project.viewText(item.id, kind.id, 'b')]);
+      [a, b] = await Promise.all([project.viewText(item.id, kind.id, 'a'), mode === 'compare' ? project.viewText(item.id, kind.id, 'b') : Promise.resolve(null)]);
     } catch (err) {
       done();
       if (seq === openSeq) showToast(`Could not open ${item.name}: ${errorText(err)}`);
@@ -578,13 +729,15 @@ async function startApp({ root, engine, registry, project, views, history }: App
     done();
     if (seq !== openSeq) return; // a newer open (or Back) won
     current = { item, view: kind };
+    clearRendered();
     views.openView({ key: `${item.id}#${kind.id}`, a, b, language });
     selectLang.value = language;
+    // extra.line: jumping to the hit's line inside an item view needs an engine API (requested in STATUS.md).
     explorer.setActive(item.id);
     renderItemBar();
     if (!quiet) {
       const viewNote = item.views.length > 1 ? ` ${kind.label} view.` : '';
-      announce(`Opened ${item.name}, ${statusWord(item.status, settings.labels)}.${viewNote} Alt+Left to go back.`);
+      announce(`Opened ${item.name}${mode === 'compare' ? `, ${statusWord(item.status, settings.labels)}` : ''}.${viewNote} Alt+Left to go back.`);
     }
   }
 
@@ -614,7 +767,8 @@ async function startApp({ root, engine, registry, project, views, history }: App
     }
     const { item, view } = current;
     crumbGroup.textContent = GROUP_LABELS[item.group];
-    crumbStatus.replaceChildren(glyph(item.status), h('span', { class: 'visually-hidden' }, statusWord(item.status, settings.labels)));
+    crumbStatus.replaceChildren(...(mode === 'compare' ? [glyph(item.status), h('span', { class: 'visually-hidden' }, statusWord(item.status, settings.labels))] : []));
+    renderDownload(item);
     crumbName.textContent = item.name;
     crumbName.title = item.id;
     crumbDetail.textContent = item.detail;
@@ -664,6 +818,15 @@ async function startApp({ root, engine, registry, project, views, history }: App
   }
 
   function back(): void {
+    if (asmCodeShown) {
+      showAsmBrowser();
+      return;
+    }
+    if (overviewOpen && !current) {
+      closeOverview();
+      announce('Closed the overview');
+      return;
+    }
     if (!current || !views) return;
     openSeq++;
     clearTimeout(loadingTimer);
@@ -746,10 +909,253 @@ async function startApp({ root, engine, registry, project, views, history }: App
   });
 
   btnExplorer.addEventListener('click', () => toggleExplorer());
+  btnMode.addEventListener('click', () => setMode(mode === 'browse' ? 'compare' : 'browse'));
+  btnSearch.addEventListener('click', () => searchPanel?.open());
   btnBack.addEventListener('click', back);
   btnShowInProject.addEventListener('click', showInProject);
   btnPrevItem.addEventListener('click', () => stepItem(-1));
   btnNextItem.addEventListener('click', () => stepItem(1));
+
+  // ---------- browse / compare mode ----------
+  function renderMode(): void {
+    root.dataset.mode = mode;
+    const other = mode === 'browse' ? 'compare' : 'browse';
+    btnMode.replaceChildren(h('span', { class: 'mode-icon', 'aria-hidden': 'true' }, mode === 'browse' ? '▣' : '◫'), mode === 'browse' ? 'Browse' : 'Compare');
+    btnMode.dataset.mode = mode;
+    btnMode.setAttribute('aria-label', `Mode: ${mode}. Switch to ${other}`);
+    btnMode.title = mode === 'browse' ? 'Browsing one package. Click to compare two.' : 'Comparing two sides. Click to browse one package.';
+    explorer.setBrowse(mode === 'browse');
+  }
+
+  function setMode(next: AppMode): void {
+    if (next === mode) return;
+    mode = next;
+    settings.mode = next;
+    save();
+    renderMode();
+    if (ready) views?.setSingle?.(mode === 'browse');
+    renderEmpty();
+    renderStats(lastStats);
+    if (mode === 'compare' && empty.b && !empty.a) showToast(`Compare mode: now open or drop the second package into ${settings.labels.b}`);
+    // Statuses, summaries and overviews depend on the mode: re-index and re-open what is shown.
+    if (project && ready) void runIndex();
+    if (current) void openItem(current.item, current.view.id, true);
+  }
+
+  function openPicker(): void {
+    const side: Side = mode === 'browse' ? 'a' : empty.a ? 'a' : empty.b ? 'b' : 'a';
+    panes[side].file.click();
+  }
+
+  function renderPackageFacts(): void {
+    const browse = mode === 'browse';
+    statPackage.hidden = !browse;
+    if (!browse || !ready) return;
+    const ov = project?.overview?.('a') ?? null;
+    const pkg = packageFor('a');
+    const parts: string[] = [];
+    if (ov) {
+      parts.push(ov.name);
+      if (index) parts.push(`${fmt(index.items.filter((i) => i.a).length)} items`);
+      if (ov.bytes) parts.push(formatSize(ov.bytes));
+      if (ov.attributes['product-version']) parts.push(`version ${ov.attributes['product-version']}`);
+      if (ov.warnings.length) parts.push(`${fmt(ov.warnings.length)} warning${ov.warnings.length === 1 ? '' : 's'}`);
+    } else if (pkg) {
+      parts.push(pkg.name, formatSize(pkg.bytes));
+      if (pkg.entries.length) parts.push(`${fmt(pkg.entries.length)} files`);
+    } else if (!empty.a) {
+      parts.push(fullMeta.a);
+    }
+    statPackage.textContent = parts.join(' · ');
+  }
+
+  // ---------- rendered views ----------
+  let rendered: Rendered | null = null;
+  let asmCodeShown = false;
+  const loadedAsm = new Set<string>();
+
+  function showRendered(r: Rendered): void {
+    clearRendered();
+    rendered = r;
+    renderHost.replaceChildren(r.el);
+    renderHost.hidden = false;
+    renderHost.scrollTop = 0;
+  }
+
+  function clearRendered(): void {
+    rendered?.dispose();
+    rendered = null;
+    renderHost.replaceChildren();
+    renderHost.hidden = true;
+    asmBar.hidden = true;
+    asmCodeShown = false;
+  }
+
+  async function bytesOf(item: ProjectItem): Promise<Record<Side, Uint8Array | null>> {
+    if (!project?.viewBytes) return { a: null, b: null };
+    const [a, b] = await Promise.all([
+      item.a ? project.viewBytes(item.id, 'a') : Promise.resolve(null),
+      mode === 'compare' && item.b ? project.viewBytes(item.id, 'b') : Promise.resolve(null),
+    ]);
+    return { a, b };
+  }
+
+  async function renderItemView(item: ProjectItem, kind: ItemViewKind, extra: Partial<Pick<OpenHit, 'asm'>>): Promise<Rendered> {
+    const labels = settings.labels;
+    switch (kind.id) {
+      case 'summary': {
+        if (!project?.viewSummary) throw new Error('summaries are not available yet');
+        const [a, b] = await Promise.all([
+          item.a ? project.viewSummary(item.id, 'a') : Promise.resolve(null),
+          mode === 'compare' && item.b ? project.viewSummary(item.id, 'b') : Promise.resolve(null),
+        ]);
+        return renderSummary(a, b, mode, labels);
+      }
+      case 'image':
+        return renderImage(await bytesOf(item), item.name, mode, labels);
+      case 'assembly': {
+        const bytes = await bytesOf(item);
+        if (!assemblies) return renderBinary(bytes, mode, labels, 'The assembly browser is not available in this build; showing the raw file.');
+        for (const s of SIDES) if (bytes[s]) loadedAsm.add(`${s}:${item.id}`);
+        return createAssemblyView({
+          browser: assemblies, mode, labels, itemId: item.id, name: item.name, bytes,
+          ...(extra.asm ? { select: extra.asm } : {}),
+          announce,
+          showCode: (title, a, b, language) => showAsmCode(item, title, a, b, language),
+        });
+      }
+      default:
+        return renderBinary(await bytesOf(item), mode, labels);
+    }
+  }
+
+  /** Decompiled C# / IL / outline in the read-only editor, with a bar back to the browser. */
+  function showAsmCode(item: ProjectItem, title: string, a: string | null, b: string | null, language: string): void {
+    if (!views || current?.item.id !== item.id) return;
+    void registry.ensureLoaded(language).catch(() => undefined).then(() => {
+      views.openView({ key: `${item.id}#assembly:${title}`, a, b: mode === 'compare' ? b : null, language });
+      renderHost.hidden = true;
+      asmBar.hidden = false;
+      asmBarTitle.textContent = title;
+      asmCodeShown = true;
+      announce(`${title}. Esc returns to the assembly browser.`);
+    });
+  }
+
+  function showAsmBrowser(): void {
+    if (!current || !views || !rendered) return;
+    views.openView({ key: `${current.item.id}#${current.view.id}`, a: current.item.a ? '' : null, b: mode === 'compare' && current.item.b ? '' : null, language: 'plaintext' });
+    renderHost.hidden = false;
+    asmBar.hidden = true;
+    asmCodeShown = false;
+    announce('Back to the assembly browser');
+  }
+  btnAsmBrowser.addEventListener('click', showAsmBrowser);
+
+  async function loadAllAssemblies(): Promise<number> {
+    if (!assemblies || !project?.viewBytes || !index) return loadedAsm.size;
+    const items = index.items.filter((i) => i.views.some((v) => v.id === 'assembly'));
+    await Promise.all(items.flatMap((item) => (mode === 'compare' ? SIDES : (['a'] as const)).filter((s) => item[s]).map(async (s) => {
+      const key = `${s}:${item.id}`;
+      if (loadedAsm.has(key)) return;
+      const bytes = await project.viewBytes?.(item.id, s);
+      if (!bytes) return;
+      try {
+        await assemblies.load(key, bytes);
+        loadedAsm.add(key);
+      } catch {
+        // Not a .NET assembly: nothing to search.
+      }
+    })));
+    return loadedAsm.size;
+  }
+
+  async function openHit(hit: OpenHit): Promise<void> {
+    const item = index?.items.find((i) => i.id === hit.itemId);
+    if (!item) return;
+    await openItem(item, hit.view, false, hit);
+    if (!explorer.drawer.hidden) explorer.reveal(item.id);
+  }
+
+  // ---------- downloads (original bytes from the package, no network) ----------
+  function renderDownload(item: ProjectItem): void {
+    const fileLike = FILE_ELEMENTS.has(item.element) || item.views.some((v) => v.id === 'image' || v.id === 'assembly' || v.id === 'binary');
+    const can = !!project?.viewBytes && fileLike;
+    btnDownload.hidden = !can || !item.a;
+    btnDownloadB.hidden = !can || mode !== 'compare' || !item.b;
+    btnDownload.title = mode === 'compare' ? `Download ${item.name} from ${settings.labels.a}` : `Download ${item.name}`;
+    btnDownload.textContent = mode === 'compare' ? `⤓ ${settings.labels.a}` : '⤓ Download';
+    btnDownloadB.title = `Download ${item.name} from ${settings.labels.b}`;
+    btnDownloadB.textContent = `⤓ ${settings.labels.b}`;
+  }
+
+  async function download(side: Side): Promise<void> {
+    if (!current || !project?.viewBytes) return;
+    const { item } = current;
+    const bytes = await project.viewBytes(item.id, side).catch(() => null);
+    if (!bytes) {
+      showToast(`${item.name} has no file content in ${settings.labels[side]} (project.xml only references it)`);
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/octet-stream' }));
+    const a = h('a', { href: url, download: item.name.replace(/[\\/:*?"<>|]/g, '_') || 'file' });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    announce(`Downloading ${item.name}`);
+  }
+  btnDownload.addEventListener('click', () => void download('a'));
+  btnDownloadB.addEventListener('click', () => void download('b'));
+
+  // ---------- overview ----------
+  let overviewOpen = false;
+  function openOverview(refresh = false): void {
+    if (!project?.overview || !isProject()) return;
+    if (!refresh && current && views) {
+      openSeq++;
+      views.closeView();
+    }
+    const ov = { a: project.overview('a'), b: mode === 'compare' ? project.overview('b') : null };
+    const findAsm = (path: string): ProjectItem | undefined => {
+      const p = path.toLowerCase();
+      return index?.items.find((i) => i.views.some((v) => v.id === 'assembly') && (i.id.toLowerCase() === `zip:${p}` || i.detail.replace(/\\/g, '/').toLowerCase().includes(p) || i.id.replace(/\\/g, '/').toLowerCase().endsWith(p)));
+    };
+    const r = renderOverview(ov, mode, settings.labels, {
+      group: (g) => {
+        if (!explorerSettings.open) toggleExplorer(true);
+        explorer.showGroup(g);
+      },
+      screen: (id) => {
+        const it = index?.items.find((i) => i.screenId === id && i.element === 'Page') ?? index?.items.find((i) => i.screenId === id);
+        if (it) {
+          void openItem(it);
+          if (!explorer.drawer.hidden) explorer.reveal(it.id);
+        }
+      },
+      assembly: (path) => {
+        const it = findAsm(path);
+        if (it) void openItem(it, 'assembly');
+        else showToast(`${path} is not listed as an item`);
+      },
+    });
+    overviewOpen = true;
+    showRendered(r);
+    root.dataset.overview = 'true';
+    explorer.setOverviewActive(true);
+    renderEmpty();
+    if (!refresh) announce(`Overview of ${ov.a?.name ?? settings.labels.a}${ov.b ? ` and ${ov.b.name}` : ''}`);
+  }
+
+  function closeOverview(keepHost = false): void {
+    if (!overviewOpen) return;
+    overviewOpen = false;
+    root.dataset.overview = 'false';
+    explorer.setOverviewActive(false);
+    if (!keepHost) clearRendered();
+    renderEmpty();
+  }
+  explorer.setOverview(project?.overview ? () => openOverview() : null);
 
   // ---------- drag and drop (files only; text drags stay with Monaco) ----------
   let dropTimer: ReturnType<typeof setTimeout> | undefined;
@@ -770,20 +1176,38 @@ async function startApp({ root, engine, registry, project, views, history }: App
       dropTimer = setTimeout(() => showDrop(null), 200);
     }, true);
     el.addEventListener('drop', (e) => {
-      const f = e.dataTransfer?.files[0];
-      if (!f) return;
+      const files = [...(e.dataTransfer?.files ?? [])];
+      if (files.length === 0) return;
       e.preventDefault();
       e.stopPropagation();
       showDrop(null);
-      void loadFile(pick(e), f);
+      // A start-screen card picks the mode; two files on the compare card fill A and B.
+      const zone = (e.target as Element | null)?.closest?.('[data-drop-mode]');
+      if (zone instanceof HTMLElement && (zone.dataset.dropMode === 'browse' || zone.dataset.dropMode === 'compare')) setMode(zone.dataset.dropMode);
+      if (files.length > 1 && mode === 'compare') loadFiles(files);
+      else void loadFile(pick(e), files[0] as File);
     }, true);
   }
-  // A file dropped anywhere else must not navigate the tab away.
+  // Paste on the start screen (focus is not in the hidden editor): the text goes into A,
+  // so the paste-first workflow stays one keystroke from a cold start.
+  document.addEventListener('paste', (e) => {
+    if (startScreen.el.hidden || isTextTarget(e.target) || !ready) return;
+    const text = e.clipboardData?.getData('text/plain') ?? '';
+    if (!text) return;
+    e.preventDefault();
+    const side: Side = mode === 'browse' || empty.a ? 'a' : 'b';
+    replaceText(side, text, 'paste');
+    detectFrom(text);
+    announce(`Pasted into ${settings.labels[side]}`);
+  });
+  // Drop anywhere else: route by mode instead of letting the tab navigate away.
   window.addEventListener('dragover', (e) => {
     if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
   });
   window.addEventListener('drop', (e) => {
-    if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
+    if (!e.dataTransfer?.types.includes('Files')) return;
+    e.preventDefault();
+    loadFiles([...e.dataTransfer.files]);
   });
 
   // ---------- add-language dialog (P2 shell) ----------
@@ -859,7 +1283,7 @@ async function startApp({ root, engine, registry, project, views, history }: App
   }
   function closeDialogs(): boolean {
     let closed = false;
-    for (const d of [shortcutsDialog, addLangDialog, quickOpen]) {
+    for (const d of [shortcutsDialog, addLangDialog, quickOpen, ...(searchPanel ? [searchPanel.dialog] : [])]) {
       if (d.open) {
         d.close();
         closed = true;
@@ -883,14 +1307,14 @@ async function startApp({ root, engine, registry, project, views, history }: App
 
   // ---------- keyboard shortcuts: document, capture phase, so Monaco can't swallow them ----------
   document.addEventListener('keydown', (e) => {
-    const dialogOpen = shortcutsDialog.open || addLangDialog.open || quickOpen.open;
+    const dialogOpen = shortcutsDialog.open || addLangDialog.open || quickOpen.open || !!searchPanel?.dialog.open;
     const stop = (): void => {
       e.preventDefault();
       e.stopPropagation();
     };
     if (e.key === 'Escape') {
       if (closeDialogs()) stop();
-      else if (current && !escapeBelongsToTarget(e.target)) {
+      else if ((current || overviewOpen || asmCodeShown) && !escapeBelongsToTarget(e.target)) {
         back();
         stop();
       }
@@ -899,7 +1323,9 @@ async function startApp({ root, engine, registry, project, views, history }: App
     if (dialogOpen) return;
     if ((e.ctrlKey || e.metaKey) && !e.altKey) {
       const key = e.key.toLowerCase();
-      if (key === 'b' && !e.shiftKey && isProject()) toggleExplorer();
+      if (key === 'f' && e.shiftKey && searchPanel && isProject()) searchPanel.open();
+      else if (key === 'o' && !e.shiftKey) openPicker();
+      else if (key === 'b' && !e.shiftKey && isProject()) toggleExplorer();
       else if (key === 'p' && !e.shiftKey && isProject()) openQuickOpen();
       // Inside an editor the engine owns Ctrl+Z (Monaco's stack first, then the replace history).
       else if (key === 'z' && !e.shiftKey && history && !isTextTarget(e.target)) undoOrRedo('undo');
@@ -921,7 +1347,7 @@ async function startApp({ root, engine, registry, project, views, history }: App
       if (ready) engine.prevChange();
     } else if (e.altKey && !e.shiftKey && e.code === 'KeyH') {
       toggleDiffOnly();
-    } else if (e.altKey && !e.shiftKey && e.key === 'ArrowLeft' && current) {
+    } else if (e.altKey && !e.shiftKey && e.key === 'ArrowLeft' && (current || overviewOpen || asmCodeShown)) {
       back();
     } else if (e.altKey && !e.shiftKey && (e.key === 'PageUp' || e.key === 'PageDown') && current) {
       stepItem(e.key === 'PageUp' ? -1 : 1);
@@ -945,6 +1371,7 @@ async function startApp({ root, engine, registry, project, views, history }: App
   renderEmpty();
   renderItemBar();
   renderExplorerChrome();
+  renderMode();
 
   // 2. Language before mount; fall back to plain text if the saved one is gone.
   try {
@@ -983,6 +1410,7 @@ async function startApp({ root, engine, registry, project, views, history }: App
   });
   engine.on('view', ({ key }) => {
     if (key !== null) return;
+    if (!overviewOpen) clearRendered();
     current = null;
     explorer.setActive(null);
     renderItemBar();
@@ -1001,7 +1429,9 @@ async function startApp({ root, engine, registry, project, views, history }: App
   engine.setTheme(settings.theme);
   engine.setLanguage(settings.language);
   engine.setOptions({ ...settings.diff });
+  views?.setSingle?.(mode === 'browse');
   ready = true;
+  renderPackageFacts();
   new ResizeObserver(() => engine.layout()).observe(editorEl);
   root.dataset.ready = 'true';
 }

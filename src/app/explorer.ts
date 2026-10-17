@@ -75,6 +75,14 @@ export interface Explorer {
   relabel(): void;
   /** Last filter apply time in ms, for measurements. */
   lastRenderMs(): number;
+  /** Browse mode: one side, no statuses, no status chips, every item listed. */
+  setBrowse(on: boolean): void;
+  /** Shows the Overview entry at the top of the drawer (null hides it). */
+  setOverview(open: (() => void) | null): void;
+  /** Marks the Overview entry as the current page. */
+  setOverviewActive(on: boolean): void;
+  /** Expands one group, collapses the others, clears the text filter and scrolls to it. */
+  showGroup(group: ProjectGroup): void;
 }
 
 interface Row {
@@ -112,9 +120,14 @@ export function createExplorer(host: ExplorerHost): Explorer {
     'only-b': chip('only-b', ''),
   };
   const list = h('div', { class: 'ex-list', role: 'tree', tabindex: 0, 'aria-label': 'Project items' });
+  const btnOverview = h('button', { type: 'button', class: 'ex-overview', 'data-testid': 'explorer-overview', hidden: true },
+    h('span', { class: 'ex-ov-icon', 'aria-hidden': 'true' }, '◈'), 'Overview');
+  let browse = false;
+  /** The filter in effect: browse mode always lists everything. */
+  const filterNow = (): ItemFilter => (browse ? 'all' : host.settings.filter);
   const empty = h('div', { class: 'ex-empty', hidden: true });
   const drawer = h('aside', { class: 'explorer', 'data-testid': 'explorer', 'aria-label': 'Project explorer', hidden: true },
-    h('div', { class: 'ex-head' }, versions, errors, filterInput,
+    h('div', { class: 'ex-head' }, versions, errors, btnOverview, filterInput,
       h('div', { class: 'ex-chips', role: 'group', 'aria-label': 'Show' }, chips.all, chips.changed, chips['only-a'], chips['only-b'])),
     list, empty);
   const splitter = h('div', {
@@ -221,7 +234,7 @@ export function createExplorer(host: ExplorerHost): Explorer {
     const labels = host.labels();
     for (const row of itemRows.values()) {
       const item = row.item;
-      if (item) row.el.setAttribute('aria-label', `${item.name}${item.detail ? `, ${item.detail}` : ''}: ${statusWord(item.status, labels)}`);
+      if (item) row.el.setAttribute('aria-label', `${item.name}${item.detail ? `, ${item.detail}` : ''}${browse ? '' : `: ${statusWord(item.status, labels)}`}`);
     }
     chips['only-a'].textContent = `Only ${labels.a}`;
     chips['only-b'].textContent = `Only ${labels.b}`;
@@ -256,14 +269,14 @@ export function createExplorer(host: ExplorerHost): Explorer {
       const b = chips[f];
       const base = f === 'all' ? 'All' : f === 'changed' ? 'Changed' : `Only ${host.labels()[f === 'only-a' ? 'a' : 'b']}`;
       b.replaceChildren(f === 'only-a' || f === 'only-b' ? glyph(f) : '', `${base} `, h('span', { class: 'chip-n' }, fmt(n[f])));
-      b.setAttribute('aria-pressed', String(host.settings.filter === f));
+      b.setAttribute('aria-pressed', String(filterNow() === f));
       b.dataset.count = String(n[f]);
     }
   }
 
   // ---------- filtering ----------
   function matches(item: ProjectItem, query: string): boolean {
-    return passesFilter(item, host.settings.filter) && (query === '' || fuzzyItem(query, item.name, item.detail) !== null);
+    return passesFilter(item, filterNow()) && (query === '' || fuzzyItem(query, item.name, item.detail) !== null);
   }
 
   function apply(): void {
@@ -304,7 +317,7 @@ export function createExplorer(host: ExplorerHost): Explorer {
         setFilter('all');
       });
       const msg = index.items.length === 0 ? 'No items in this project.'
-        : host.settings.filter === 'changed' && query === '' ? 'No changes: every item is the same on both sides.'
+        : filterNow() === 'changed' && query === '' ? 'No changes: every item is the same on both sides.'
         : 'No items match.';
       empty.replaceChildren(h('p', {}, msg), index.items.length ? showAll : '');
     }
@@ -470,7 +483,7 @@ export function createExplorer(host: ExplorerHost): Explorer {
       if (!row?.item) return;
       if (!matches(row.item, filterInput.value.trim())) {
         filterInput.value = '';
-        if (!passesFilter(row.item, host.settings.filter)) host.settings.filter = 'all';
+        if (!passesFilter(row.item, filterNow())) host.settings.filter = 'all';
         host.save();
       }
       collapsed.delete(row.group);
@@ -482,5 +495,32 @@ export function createExplorer(host: ExplorerHost): Explorer {
     },
     relabel,
     lastRenderMs: () => renderMs,
+    setBrowse(on) {
+      if (browse === on) return;
+      browse = on;
+      drawer.classList.toggle('is-browse', on);
+      relabel();
+      apply();
+    },
+    setOverview(open) {
+      btnOverview.hidden = open === null;
+      btnOverview.onclick = open;
+    },
+    setOverviewActive(on) {
+      btnOverview.classList.toggle('is-active', on);
+      if (on) btnOverview.setAttribute('aria-current', 'page');
+      else btnOverview.removeAttribute('aria-current');
+    },
+    showGroup(group) {
+      filterInput.value = '';
+      collapsed.clear();
+      for (const g of groupRows.keys()) if (g !== group) collapsed.add(g);
+      apply();
+      const row = groupRows.get(group);
+      if (row) {
+        setCursor(rows.indexOf(row), false);
+        row.el.scrollIntoView({ block: 'start' });
+      }
+    },
   };
 }

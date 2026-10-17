@@ -125,4 +125,15 @@ describe('SettingsStore', () => {
     const narrow = createSettingsStore(memoryStorage(JSON.stringify({ explorer: { width: 10 } }))).load();
     expect(narrow.explorer?.width).toBe(200);
   });
+
+  it('persists the mode and ignores unknown values', () => {
+    const storage = memoryStorage();
+    const store = createSettingsStore(storage);
+    const s = store.load();
+    expect(s.mode).toBeUndefined();
+    s.mode = 'browse';
+    store.save(s);
+    expect(createSettingsStore(storage).load().mode).toBe('browse');
+    expect(createSettingsStore(memoryStorage(JSON.stringify({ mode: 'edit' }))).load().mode).toBeUndefined();
+  });
 });

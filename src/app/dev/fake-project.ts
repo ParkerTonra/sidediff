@@ -4,16 +4,24 @@
 // direct child of <Customization> per two-space-indented start tag.
 import type {
   ItemStatus,
+  ItemSummary,
   ItemViewKind,
+  PackageEntry,
+  PackageOverview,
+  PackageSource,
   ProjectGroup,
   ProjectIndex,
   ProjectIndexer,
   ProjectItem,
   ProjectSideInfo,
+  SearchHit,
+  SearchOptions,
   Side,
 } from '../../types';
 
-const GROUP_ORDER: readonly ProjectGroup[] = ['code', 'screens', 'tables', 'sql', 'reports', 'inquiries', 'sitemap', 'integration', 'files', 'other'];
+const GROUP_ORDER: readonly ProjectGroup[] = [
+  'code', 'screens', 'tables', 'sql', 'reports', 'inquiries', 'sitemap', 'integration', 'security', 'files', 'assemblies', 'images', 'other',
+];
 
 interface RawItem {
   element: string;
@@ -142,6 +150,8 @@ function classify(item: RawItem): { group: ProjectGroup; name: string; detail: s
       return { group: 'sitemap', name: a.ScreenID ?? a.Title ?? '', detail: a.Title ?? '', views: [xml] };
     case 'GenericInquiryScreen':
       return { group: 'inquiries', name: a.Name ?? '', detail: 'Generic inquiry', views: [xml] };
+    case 'ScreenWithRights':
+      return { group: 'security', name: a.ScreenID ?? '', detail: 'Access rights', views: [xml] };
     case 'EntityEndpoint':
       return { group: 'integration', name: a.Name ?? '', detail: `Endpoint ${a.Version ?? ''}`.trim(), views: [xml] };
     default:
@@ -160,33 +170,144 @@ function statusOf(a: string, b: string): ItemStatus {
   return trim(a) === trim(b) ? 'whitespace' : 'modified';
 }
 
+type ViewId = ItemViewKind['id'];
+
+interface SideState {
+  scan: Scan;
+  pkg: PackageSource | null;
+  /** Item id → zip path, for File items backed by a zip entry and for Zip: items. */
+  files: Map<string, PackageEntry>;
+}
+
+const SUMMARY: ItemViewKind = { id: 'summary', label: 'Summary', language: 'plaintext' };
+const SUMMARY_ELEMENTS = new Set(['Table', 'Page', 'GenericInquiryScreen', 'SiteMapNode', 'ScreenWithRights', 'Sql']);
+
+function fileViews(entry: PackageEntry): ItemViewKind[] {
+  const xml: ItemViewKind = { id: 'xml', label: 'XML', language: 'xml' };
+  switch (entry.kind) {
+    case 'image': return [{ id: 'image', label: 'Image', language: 'plaintext' }, xml];
+    case 'assembly': return [{ id: 'assembly', label: 'Assembly', language: 'plaintext' }, xml];
+    case 'binary': return [{ id: 'binary', label: 'Binary', language: 'plaintext' }, xml];
+    default: {
+      const language = /\.cs$/i.test(entry.path) ? 'csharp' : /\.(aspx|xml|config|esc|rpx|html?)$/i.test(entry.path) ? 'xml' : 'plaintext';
+      return [{ id: 'code', label: /\.cs$/i.test(entry.path) ? 'C#' : 'Text', language }, xml];
+    }
+  }
+}
+
+function childRows(item: RawItem, tag: string): Record<string, string>[] {
+  return item.lines.filter((l) => new RegExp(`<${tag}\\b`).test(l)).map((l) => attrsOf(l));
+}
+
+function summarize(item: RawItem): ItemSummary {
+  const a = item.attrs;
+  const facts = Object.entries(a).slice(0, 8) as [string, string][];
+  switch (item.element) {
+    case 'Table':
+      return { title: `Table ${a.TableName ?? ''}`, facts, sections: [{ heading: 'Columns', columns: ['Column', 'Type'], keyColumn: 0, rows: childRows(item, 'Column').map((r) => [r.ColumnName ?? '', r.ColumnType ?? '']) }] };
+    case 'Page': {
+      const fields = childRows(item, 'PXField');
+      const members = [...new Set(fields.map((f) => f.DataMember ?? ''))];
+      return {
+        title: `Screen ${screenIdOf(item) ?? ''}`, facts: [['Screen', screenIdOf(item) ?? ''], ['Title', a.ScreenTitle ?? '']],
+        sections: members.map((m) => ({ heading: `PXFormView · ${m}`, columns: ['DataField', 'CommitChanges'], keyColumn: 0, rows: fields.filter((f) => f.DataMember === m).map((f) => [f.DataField ?? '', f.CommitChanges ?? '']) })),
+      };
+    }
+    case 'ScreenWithRights':
+      return { title: `Access rights ${a.ScreenID ?? ''}`, facts: [['Screen', a.ScreenID ?? '']], sections: [{ heading: 'Roles', columns: ['Role', 'Rights'], keyColumn: 0, rows: childRows(item, 'row').map((r) => [r.RoleName ?? '', r.Rights ?? '']) }] };
+    case 'GenericInquiryScreen':
+      return { title: `Generic inquiry ${a.Name ?? ''}`, facts, sections: [{ heading: 'Designs', columns: ['DesignID'], keyColumn: 0, rows: childRows(item, 'GIDesign').map((r) => [r.DesignID ?? '']) }] };
+    default:
+      return { title: `${item.element} ${identity(item)}`, facts, sections: [] };
+  }
+}
+
+function lineHits(text: string, re: RegExp): { line: number; column: number; preview: string }[] {
+  const out: { line: number; column: number; preview: string }[] = [];
+  text.split(/\r?\n/).forEach((l, i) => {
+    re.lastIndex = 0;
+    const m = re.exec(l);
+    if (m) out.push({ line: i + 1, column: m.index + 1, preview: l.trim().slice(0, 200) });
+  });
+  return out;
+}
+
 export function createFakeProjectIndexer(opts: { delayMs?: number } = {}): ProjectIndexer & { calls: number; viewDelayMs: number } {
-  let last: Record<Side, Scan> | null = null;
+  let last: Record<Side, SideState> | null = null;
+  let lastItems: ProjectItem[] = [];
   let generation = 0;
+
+  function sideState(text: string, pkg: PackageSource | null): SideState {
+    const st: SideState = { scan: scan(text), pkg, files: new Map() };
+    if (!pkg) return st;
+    const byPath = new Map(pkg.entries.map((e) => [e.path.toLowerCase(), e]));
+    const used = new Set<string>();
+    for (const [id, raw] of st.scan.items) {
+      const p = raw.attrs.AppRelativePath?.replace(/\\/g, '/').toLowerCase();
+      const entry = p ? byPath.get(p) : undefined;
+      if (entry) {
+        st.files.set(id, entry);
+        used.add(entry.path.toLowerCase());
+      }
+    }
+    for (const e of pkg.entries) {
+      if (used.has(e.path.toLowerCase())) continue;
+      const id = `Zip:${e.path}`;
+      st.scan.items.set(id, { element: 'Zip', attrs: { path: e.path }, startLine: 0, endLine: 0, lines: [], cdata: [] });
+      st.files.set(id, e);
+    }
+    return st;
+  }
+
+  async function textOf(st: SideState, id: string, view: ViewId): Promise<string | null> {
+    const raw = st.scan.items.get(id);
+    if (!raw) return null;
+    const entry = st.files.get(id);
+    if (entry && view === 'code' && entry.kind === 'text' && st.pkg) return st.pkg.readText(entry.path);
+    if (view === 'code' || view === 'xml' || view === 'changes') return raw.element === 'Zip' ? null : viewOf(raw, view);
+    return null;
+  }
+
   const indexer = {
     calls: 0,
     /** Simulated decode time per viewText call (Page sources are inflated on demand). */
     viewDelayMs: 0,
-    async index(textA: string, textB: string): Promise<ProjectIndex> {
+    async index(textA: string, textB: string, packages: Partial<Record<Side, PackageSource>> = {}): Promise<ProjectIndex> {
       const gen = ++generation;
       indexer.calls++;
       await new Promise((r) => setTimeout(r, opts.delayMs ?? 150));
       if (gen !== generation) throw new DOMException('superseded', 'AbortError');
-      const sides = { a: scan(textA), b: scan(textB) };
+      const sides = { a: sideState(textA, packages.a ?? null), b: sideState(textB, packages.b ?? null) };
       last = sides;
-      const ids = new Set([...sides.a.items.keys(), ...sides.b.items.keys()]);
+      const ids = new Set([...sides.a.scan.items.keys(), ...sides.b.scan.items.keys()]);
       const items: ProjectItem[] = [];
       const counts: Record<ItemStatus, number> = { same: 0, whitespace: 0, modified: 0, 'only-a': 0, 'only-b': 0 };
       for (const id of ids) {
-        const ra = sides.a.items.get(id);
-        const rb = sides.b.items.get(id);
+        const ra = sides.a.scan.items.get(id);
+        const rb = sides.b.scan.items.get(id);
         const any = ra ?? rb;
         if (!any) continue;
-        const c = classify(any);
-        const v = c.views[0]?.id ?? 'xml';
-        const status: ItemStatus = !ra ? 'only-b' : !rb ? 'only-a' : statusOf(viewOf(ra, v), viewOf(rb, v));
+        const entry = sides.a.files.get(id) ?? sides.b.files.get(id);
+        let c = classify(any);
+        if (any.element === 'Zip' && entry) {
+          const group: ProjectGroup = entry.kind === 'assembly' ? 'assemblies' : entry.kind === 'image' ? 'images' : 'files';
+          c = { group, name: entry.path.split('/').pop() ?? entry.path, detail: `${entry.path} · not in project.xml`, views: fileViews(entry).filter((v) => v.id !== 'xml') };
+        } else if (entry) {
+          c = { ...c, views: fileViews(entry), ...(entry.kind === 'assembly' ? { group: 'assemblies' as ProjectGroup } : entry.kind === 'image' ? { group: 'images' as ProjectGroup } : {}) };
+        }
+        if (SUMMARY_ELEMENTS.has(any.element)) c.views = [SUMMARY, ...c.views];
+        const v = c.views.find((x) => x.id !== 'summary')?.id ?? 'xml';
+        let status: ItemStatus;
+        if (!ra) status = 'only-b';
+        else if (!rb) status = 'only-a';
+        else if (entry && entry.kind !== 'text') {
+          const ea = sides.a.files.get(id);
+          const eb = sides.b.files.get(id);
+          const [ba, bb] = await Promise.all([ea && sides.a.pkg?.read(ea.path), eb && sides.b.pkg?.read(eb.path)]);
+          status = ba && bb && ba.length === bb.length && ba.every((x, i) => x === bb[i]) ? 'same' : 'modified';
+        } else status = statusOf((await textOf(sides.a, id, v)) ?? '', (await textOf(sides.b, id, v)) ?? '');
         counts[status]++;
-        const screenId = screenIdOf(any);
+        const screenId = any.element === 'Zip' ? undefined : screenIdOf(any);
         items.push({
           id, group: c.group, element: any.element, name: c.name, detail: c.detail, status, views: c.views,
           ...(screenId ? { screenId } : {}),
@@ -195,12 +316,64 @@ export function createFakeProjectIndexer(opts: { delayMs?: number } = {}): Proje
         });
       }
       items.sort((x, y) => GROUP_ORDER.indexOf(x.group) - GROUP_ORDER.indexOf(y.group) || x.name.localeCompare(y.name));
-      return { sides: { a: sides.a.info, b: sides.b.info }, items, counts };
+      lastItems = items;
+      return { sides: { a: sides.a.scan.info, b: sides.b.scan.info }, items, counts };
     },
-    async viewText(itemId: string, view: ItemViewKind['id'], side: Side): Promise<string | null> {
-      const raw = last?.[side].items.get(itemId);
+    async viewText(itemId: string, view: ViewId, side: Side): Promise<string | null> {
       if (indexer.viewDelayMs > 0) await new Promise((r) => setTimeout(r, indexer.viewDelayMs));
-      return raw ? viewOf(raw, view) : null;
+      const st = last?.[side];
+      return st ? textOf(st, itemId, view) : null;
+    },
+    async viewBytes(itemId: string, side: Side): Promise<Uint8Array | null> {
+      const st = last?.[side];
+      const entry = st?.files.get(itemId);
+      return st?.pkg && entry ? st.pkg.read(entry.path) : null;
+    },
+    async viewSummary(itemId: string, side: Side): Promise<ItemSummary | null> {
+      const raw = last?.[side].scan.items.get(itemId);
+      return raw && SUMMARY_ELEMENTS.has(raw.element) ? summarize(raw) : null;
+    },
+    overview(side: Side): PackageOverview | null {
+      const st = last?.[side];
+      if (!st || (!st.scan.info.isProject && !st.pkg)) return null;
+      const counts: Partial<Record<ProjectGroup, number>> = {};
+      const present = lastItems.filter((i) => i[side]);
+      for (const i of present) counts[i.group] = (counts[i.group] ?? 0) + 1;
+      const titles = new Map(present.filter((i) => i.group === 'sitemap').map((i) => [i.name, i.detail]));
+      const screens = present.filter((i) => i.element === 'Page').map((i) => ({ screenId: i.name, title: titles.get(i.name) ?? i.detail }));
+      const referenced = [...st.scan.items.values()].filter((r) => r.attrs.AppRelativePath).map((r) => (r.attrs.AppRelativePath ?? '').replace(/\\/g, '/'));
+      const inZip = new Set(st.pkg?.entries.map((e) => e.path.toLowerCase()) ?? []);
+      const missing = st.pkg ? referenced.filter((p) => !inZip.has(p.toLowerCase())) : [];
+      const unreferenced = [...st.files.keys()].filter((k) => k.startsWith('Zip:')).length;
+      return {
+        name: st.pkg?.name ?? 'project.xml', kind: st.pkg?.kind ?? 'xml', bytes: st.pkg?.bytes ?? 0, attributes: st.scan.info.attributes, counts, screens,
+        assemblies: st.pkg?.entries.filter((e) => e.kind === 'assembly').map((e) => ({ path: e.path, size: e.size })) ?? [],
+        warnings: [
+          ...missing.map((p) => `${p} is listed in project.xml but missing from the package`),
+          ...(unreferenced ? [`${unreferenced} file${unreferenced === 1 ? '' : 's'} in the package ${unreferenced === 1 ? 'is' : 'are'} not referenced by project.xml`] : []),
+        ],
+      };
+    },
+    async search(query: string, options: SearchOptions = {}): Promise<SearchHit[]> {
+      if (!last || !query) return [];
+      const re = new RegExp(options.regex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), options.caseSensitive ? 'g' : 'gi');
+      const limit = options.limit ?? 500;
+      const hits: SearchHit[] = [];
+      for (const item of lastItems) {
+        for (const side of ['a', 'b'] as const) {
+          if (!item[side]) continue;
+          for (const v of item.views) {
+            if (v.id !== 'code' && v.id !== 'xml' && v.id !== 'changes') continue;
+            const text = await textOf(last[side], item.id, v.id);
+            if (!text) continue;
+            for (const h2 of lineHits(text, re)) {
+              hits.push({ itemId: item.id, side, view: v.id, ...h2 });
+              if (hits.length >= limit) return hits;
+            }
+          }
+        }
+      }
+      return hits;
     },
     dispose(): void {
       last = null;

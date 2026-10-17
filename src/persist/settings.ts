@@ -4,6 +4,7 @@ import {
   CONTEXT_LINES_MIN,
   DEFAULT_EXPLORER,
   DEFAULT_SETTINGS,
+  type AppMode,
   type AppSettings,
   type DiffOptions,
   type ExplorerSettings,
@@ -76,6 +77,7 @@ export function normalizeSettings(raw: unknown): AppSettings {
   }
   if (typeof raw.language === 'string' && raw.language.trim() !== '') out.language = raw.language;
   if (raw.theme === 'dark' || raw.theme === 'light') out.theme = raw.theme satisfies ThemeId;
+  if (raw.mode === 'browse' || raw.mode === 'compare') out.mode = raw.mode satisfies AppMode;
 
   if (isRecord(raw.diff)) {
     const d = raw.diff;
