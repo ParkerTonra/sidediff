@@ -179,10 +179,13 @@ test('4. assembly browser: types, Acumatica roles, string search, IL, decompile 
   await expect(detail).toContainText('TotalWeight');
   await expect(detail).toContainText('PXGraph');
   // IL of TotalWeight (foreach + string switch): the compares load the case labels.
-  const member = detail.locator('*:has(> [data-testid="btn-il"])').filter({ hasText: 'TotalWeight' }).first();
-  await member.locator('[data-testid="btn-il"]').click();
+  // Member rows are <tr data-member="…"> with the IL button in a cell.
+  await detail.locator('tr[data-member="TotalWeight"] [data-testid="btn-il"]').click();
   await expect(shown(page)).toContainText('ldstr "max"', { timeout: 15_000 });
 
+  // The IL listing replaced the browser in the editor; Esc goes back to it.
+  await page.keyboard.press('Escape');
+  await expect(tid(page, 'btn-decompile')).toBeVisible();
   await tid(page, 'btn-decompile').click();
   await expect(shown(page)).toContainText('public class ContosoRouteMaint : PXGraph<ContosoRouteMaint>', { timeout: 90_000 });
 });

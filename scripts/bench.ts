@@ -633,32 +633,30 @@ async function packageScenario(browser: Browser): Promise<void> {
     add({ metric, value: errText(e), target: '< 1500 ms', status: 'ERROR' });
   }
 
-  // Decompiler: report only.
+  // Assembly browser through window.__sidediff.assemblies: report only.
   const dmetric = 'Decompiler cold load + one type';
   try {
-    const row = page.locator('[data-testid="explorer-item"][data-id="File:Bin\\\\Contoso.Extensions.dll"]');
-    if ((await row.count()) === 0) throw new Error('DLL item not listed');
-    await row.click();
-    const type = page.locator('[data-testid="asm-type"][data-type$="ContosoRouteMaint"]').first();
-    await type.waitFor({ timeout: 15_000 });
-    await type.click();
-    const decompile = async (): Promise<number> => {
-      const t0 = await pageNow(page);
-      await page.locator('[data-testid="btn-decompile"]').click();
-      const h = await page.waitForFunction(
-        () => ([...document.querySelectorAll('.monaco-editor .view-lines')].some((e) => /class\s+ContosoRouteMaint/.test(e.textContent ?? '')) ? performance.now() : false),
-        undefined,
-        { timeout: 120_000, polling: 25 },
-      );
-      return ((await h.jsonValue()) as number) - t0;
-    };
-    const cold = await decompile();
-    await page.keyboard.press('Alt+ArrowLeft').catch(() => undefined);
-    await row.click();
-    await type.waitFor({ timeout: 15_000 });
-    await type.click();
-    const warm = await decompile();
-    add({ metric: dmetric, value: `cold ${ms(cold)}, warm ${ms(warm)}`, target: 'report only', status: 'INFO', note: 'click Decompile → C# with the class in the editor; ContosoRouteMaint' });
+    const dll = readFileSync(join(ROOT, 'fixtures/static/Contoso.Extensions.dll')).toString('base64');
+    const r = await page.evaluate(async (b64) => {
+      const asm = window.__sidediff?.assemblies;
+      if (!asm) throw new Error('window.__sidediff.assemblies missing');
+      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const t0 = performance.now();
+      const info = await asm.load('bench:Contoso.Extensions.dll', bytes);
+      const t1 = performance.now();
+      const cold = await asm.decompile('bench:Contoso.Extensions.dll', 'Contoso.Extensions.ContosoRouteMaint');
+      const t2 = performance.now();
+      const warm = await asm.decompile('bench:Contoso.Extensions.dll', 'Contoso.Extensions.ContosoRouteMaintExt');
+      const t3 = performance.now();
+      return { load: t1 - t0, types: info.types.length, cold: t2 - t1, warm: t3 - t2, ok: cold.includes('class ContosoRouteMaint') && warm.includes('class ContosoRouteMaintExt') };
+    }, dll);
+    add({
+      metric: dmetric,
+      value: `cold ${ms(r.cold)}, warm ${ms(r.warm)}`,
+      target: 'report only',
+      status: r.ok ? 'INFO' : 'WARN',
+      note: `metadata load ${ms(r.load)} (${r.types} types); cold = first decompile incl. .NET runtime load (ContosoRouteMaint), warm = next type${r.ok ? '' : '; C# did not contain the class'}`,
+    });
   } catch (e) {
     add({ metric: dmetric, value: errText(e), target: 'report only', status: 'INFO' });
   }
