@@ -9,7 +9,7 @@ import { createProjectIndexer, type WorkerLike } from './index';
 import { buildSummary } from './summary';
 import { createWorkerCore } from './worker-core';
 import { existsSync, readFileSync } from 'node:fs';
-import { oracleDiffs, type OracleItem } from './oracle-helper';
+import { applyPendingSidecarChanges, oracleDiffs, type OracleItem } from './oracle-helper';
 
 const deflate64 = (s: string): string => deflateRawSync(Buffer.from(s, 'utf8')).toString('base64');
 const proj = (body: string) => `<Customization level="0" product-version="24.200.0001">\r\n${body}\r\n</Customization>`;
@@ -398,6 +398,38 @@ describe('summaries', () => {
     expect(s.facts).toContainEqual(['Workspace', 'Demo Workspace']);
   });
 
+  it('CSAttribute: allowed values keyed by ValueID (sorted by SortOrder) and screens using it', async () => {
+    const xml =
+      '<CSAttribute><data-set><data><CSAttribute><row AttributeID="REGION" Description="Sales region" ControlType="2" IsInternal="0">' +
+      '<CSAttributeDetail ValueID="WEST" Description="West" SortOrder="2" Disabled="0" />' +
+      '<CSAttributeDetail ValueID="EAST" Description="East" SortOrder="1" Disabled="0" />' +
+      '<CSAttributeDetail ValueID="OLD" Description="Retired" SortOrder="3" Disabled="1" />' +
+      '<CSScreenAttribute ScreenID="AR303000" EntityClassID="RETAIL" Required="1" Hidden="0" />' +
+      '</row></CSAttribute></data></data-set></CSAttribute>';
+    const s = buildSummary({ kind: 'attribute', title: 'REGION', elementText: xml });
+    expect(s.facts).toEqual([
+      ['Attribute', 'REGION'],
+      ['Description', 'Sales region'],
+      ['Control type', '2'],
+      ['Internal', 'no'],
+      ['Values', '3'],
+    ]);
+    expect(s.sections[0]).toEqual({
+      heading: 'Values',
+      columns: ['ValueID', 'Description', 'Sort order', 'Disabled'],
+      rows: [
+        ['EAST', 'East', '1', 'no'],
+        ['WEST', 'West', '2', 'no'],
+        ['OLD', 'Retired', '3', 'yes'],
+      ],
+      keyColumn: 0,
+    });
+    expect(s.sections[1]?.rows).toEqual([['AR303000 · RETAIL', 'AR303000', 'RETAIL', 'yes', 'no', '']]);
+    // through the indexer: CSAttribute lists its Summary first
+    const idx = await buildIndex(proj(xml), '');
+    expect(idx.items[0]?.views.map((v) => v.id)).toEqual(['summary', 'xml']);
+  });
+
   it('MobileSiteMap: facts and script lines', () => {
     const s = buildSummary({ kind: 'mobileSitemap', title: 'DM301000', elementText: '<MobileSiteMap ScreenID="DM301000" Type="Screen" Script="add screen DM301000 {&#xA;  add container Document&#xA;}" />' });
     expect(s.facts).toEqual([
@@ -540,6 +572,7 @@ describe.skipIf(!existsSync('fixtures/package-a.zip'))('package fixture pair vs 
       it.group = g;
     }
 
+    applyPendingSidecarChanges(oracle.items);
     expect(oracleDiffs(idx.items, oracle.items)).toEqual([]);
     expect(idx.items).toHaveLength(oracle.counts.total);
     expect(idx.counts).toEqual(oracle.counts.byStatus);
@@ -551,6 +584,14 @@ describe.skipIf(!existsSync('fixtures/package-a.zip'))('package fixture pair vs 
       expect(o?.screens.map((s) => s.screenId)).toEqual(expect.arrayContaining(want.screensInclude));
       for (const w of want.warningsInclude) expect(o?.warnings.some((x) => x.includes(w))).toBe(true);
     }
+
+    // CSAttribute values: B adds EAST to CTZONE; the Values section is keyed by ValueID.
+    const zoneB = await ix.viewSummary?.('CSAttribute:CTZONE', 'b');
+    const zoneA = await ix.viewSummary?.('CSAttribute:CTZONE', 'a');
+    const valuesOf = (s: typeof zoneB) => s?.sections.find((x) => x.heading === 'Values');
+    expect(valuesOf(zoneB)?.keyColumn).toBe(0);
+    expect(valuesOf(zoneB)?.rows.map((r) => r[0])).toContain('EAST');
+    expect(valuesOf(zoneA)?.rows.map((r) => r[0])).not.toContain('EAST');
 
     // DLL string literals are the assembly browser's job (merged by the UI).
     for (const s of oracle.searches.filter((x) => !/assembly browser/.test(x.what))) {

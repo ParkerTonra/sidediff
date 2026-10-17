@@ -10,7 +10,7 @@ export const GROUP_ORDER: readonly ProjectGroup[] = ['code', 'screens', 'tables'
  * Summary builders (summary.ts). 'facts' is the generic one: every element
  * gets it as its last view; the structured ones are listed first.
  */
-export type SummaryKind = 'dac' | 'dacCode' | 'table' | 'sqlSchema' | 'page' | 'gi' | 'rights' | 'sitemap' | 'mobileSitemap' | 'facts';
+export type SummaryKind = 'dac' | 'dacCode' | 'table' | 'sqlSchema' | 'page' | 'gi' | 'rights' | 'sitemap' | 'mobileSitemap' | 'attribute' | 'facts';
 
 /** Identity fallback when an element has none of its own key attributes. */
 export const GENERIC_KEYS = ['Name', 'name', 'ScreenID', 'ClassName', 'TableName', 'ReportName', 'path', 'AppRelativePath', 'Title', 'Key'] as const;
@@ -321,6 +321,7 @@ export const RULES: readonly Rule[] = [
     firstRow: { element: 'row', anyOf: ['AttributeID'] },
     detail: (it) => (it.firstRow?.Description ? `Attribute · ${it.firstRow.Description}` : 'Attribute'),
     code: () => null,
+    summary: 'attribute',
   },
   {
     elements: ['EntityEndpoint'],

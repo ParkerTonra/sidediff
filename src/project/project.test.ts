@@ -6,7 +6,7 @@ import { classify, GROUP_ORDER, RULES, screenIdFromPath, wantsFor } from './clas
 import { cdataBody, looksLikeProject, scanProject, type CdataSection } from './scan';
 import { createProjectIndexer, type WorkerLike } from './index';
 import { createWorkerCore } from './worker-core';
-import { oracleDiffs, type OracleItem } from './oracle-helper';
+import { applyPendingSidecarChanges, oracleDiffs, type OracleItem } from './oracle-helper';
 import type { IndexRequest, IndexResponse } from './protocol';
 import type { ItemViewKind } from '../types';
 
@@ -500,6 +500,7 @@ describe.skipIf(!existsSync('fixtures/project-a.xml'))('project fixture pair vs 
   it('every item matches the sidecar (fields marked loose skipped): id, element, group, name, detail, screenId, status, views, line ranges, counts', async () => {
     const oracle = JSON.parse(readFileSync('fixtures/project.changes.json', 'utf8')) as { items: OracleItem[]; counts: { total: number; byStatus: Record<string, number> } };
     const idx = await buildIndex(readFileSync('fixtures/project-a.xml', 'utf8'), readFileSync('fixtures/project-b.xml', 'utf8'));
+    applyPendingSidecarChanges(oracle.items);
     expect(oracleDiffs(idx.items, oracle.items)).toEqual([]);
     expect(idx.items).toHaveLength(oracle.counts.total);
     expect(idx.counts).toEqual(oracle.counts.byStatus);

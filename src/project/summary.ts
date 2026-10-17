@@ -61,6 +61,8 @@ export function buildSummary(input: SummaryInput): ItemSummary {
         return el ? sitemapSummary(input.title, el) : base;
       case 'mobileSitemap':
         return el ? mobileSitemapSummary(input.title, el) : base;
+      case 'attribute':
+        return el ? attributeSummary(input.title, el) : base;
       case 'facts':
         return base;
     }
@@ -366,6 +368,38 @@ function mobileSitemapSummary(title: string, el: Node): ItemSummary {
   if (script) facts.push(['Script', `${script.split(/\r?\n/).length} lines`]);
   const lines = script ? script.split(/\r?\n/).map((l, k) => [String(k + 1), l]) : [];
   return { title, facts, sections: nonEmpty([section('Script', ['Line', 'Text'], lines, 0)]) };
+}
+
+// --- user-defined attributes -----------------------------------------------------------------
+
+/**
+ * CSAttribute: the attribute row, its allowed values (CSAttributeDetail, keyed by
+ * ValueID so compare mode diffs values) and the screens using it (CSScreenAttribute).
+ */
+function attributeSummary(title: string, el: Node): ItemSummary {
+  const row = findFirst(el, (n) => n.name === 'row' && !!n.attrs.AttributeID);
+  const a = row?.attrs ?? {};
+  const facts: [string, string][] = [];
+  if (a.AttributeID) facts.push(['Attribute', a.AttributeID]);
+  if (a.Description) facts.push(['Description', a.Description]);
+  if (a.ControlType) facts.push(['Control type', a.ControlType]);
+  if (a.EntryMask) facts.push(['Entry mask', a.EntryMask]);
+  if (a.RegExp) facts.push(['Validation', a.RegExp]);
+  if (a.IsInternal) facts.push(['Internal', a.IsInternal === '1' || a.IsInternal === 'True' ? 'yes' : 'no']);
+  const yes = (v: string | undefined) => (v === '1' || v === 'True' || v === 'true' ? 'yes' : v === undefined ? '' : 'no');
+  const values = findAll(el, 'CSAttributeDetail')
+    .map((d) => [d.attrs.ValueID ?? '', d.attrs.Description ?? '', d.attrs.SortOrder ?? '', yes(d.attrs.Disabled)])
+    .sort((x, y) => (Number(x[2]) || 0) - (Number(y[2]) || 0));
+  const screens = findAll(el, 'CSScreenAttribute').map((s) => {
+    const k = s.attrs;
+    return [`${k.ScreenID ?? ''}${k.EntityClassID ? ` · ${k.EntityClassID}` : ''}`, k.ScreenID ?? '', k.EntityClassID ?? '', yes(k.Required), yes(k.Hidden), k.DefaultValue ?? ''];
+  });
+  facts.push(['Values', String(values.length)]);
+  return {
+    title,
+    facts,
+    sections: nonEmpty([section('Values', ['ValueID', 'Description', 'Sort order', 'Disabled'], values, 0), section('Screens', ['Key', 'Screen', 'Class', 'Required', 'Hidden', 'Default'], screens, 0)]),
+  };
 }
 
 /** Re-exported for tests. */
