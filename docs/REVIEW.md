@@ -2,7 +2,45 @@
 
 Checklist of findings grouped by owner. `[ ]` open, `[x]` resolved. Reviewer: sections 3, 8, 9 of `GOAL-PROMPT.md` and `docs/INTERFACES.md`. Each pass says what was **run** and what was only **read**.
 
-## Pass 3 (HEAD 9de3e3d: project explorer, item views, whole-text undo)
+## Pass 4 (HEAD 34e5bc4: packages, browse mode, summaries, assembly browser and decompiler, search)
+
+Legend: **R** = I ran it (Playwright against a production build served by `vite preview` from a temp dir, port 5325, using `fixtures/package-a.zip` / `package-b.zip` only), **r** = read only. I did not open any real package.
+
+### Verdict
+Acceptance 1 to 8 hold on the fixtures. No blockers. Four medium items (start-screen keyboard order, overview buttons losing their role, focus loss after decompile/Back, missing third-party licence texts in what ships) and a few low ones.
+
+### Passes
+- **R Network and CSP (acceptance 8).** Cold load: zero non-localhost requests. Opening the zip (browse and compare): zero. Decompiling a type: 37 requests, all same-origin (`decompiler/_framework/*`), none external, no console errors or CSP violations. The CSP differs from pass 3 only by `img-src 'self' data: blob:`; that is needed for the image viewer (the banner image loaded, `naturalWidth` 96, blob URL). Nothing else was loosened and nothing more is needed: `script-src 'self' 'wasm-unsafe-eval'` covers the .NET wasm, `worker-src 'self' blob:` the workers, and `DecompressionStream` needs no directive. `connect-src` still allows only `'self'` and `https://cdn.jsdelivr.net` (language packs).
+- **R Bundle.** `vite build` to temp: main chunk 818 KB gzip (3 MB limit; was 789 KB). Lazy chunks: `csharp` 1.7 KB, `xml` 0.7 KB, `monaco-bundled`, `monaco-bridge` 25 KB, `asm.worker` 12.5 KB, `project.worker` 9.9 KB, `diff.worker` 34 KB, `editor.worker` 93 KB, `decompiler.worker` 0.65 KB, `onig.wasm` 162 KB. No other `languages/definitions` registrations. The decompiler (`dist/decompiler/_framework`, 37 files, 9.1 MB on disk) is only copied, not part of any JS chunk, and nothing requested it before the first Decompile (cold and zip-open request lists had no `_framework` entries; decompile fetched all 37).
+- **R Start screen.** Two cards with headings (`h2`), browse zone is a real `<button>`; pressing Enter on it opens a file chooser; compare zones are `role=button` with `tabindex=0` and `aria-label`. Contrast (dark / light): zone 13.1 / 16.5, muted 7.0 / 6.7, heading 12.0 / 14.9, link 6.4 / 6.3.
+- **R Browse/Compare switch.** `<button>` with `aria-label="Mode: browse. Switch to compare"` (contains the visible word) and `data-mode`. Ctrl+O opens the picker.
+- **R Overview.** Facts tables use `th scope` (row and column); compare mode marks differing rows with a glyph (`~`) and the row class. Group counts and warnings readable; contrast of every measured element 6.0 to 16.5 in both themes.
+- **R Summary tables (compare).** `thead`/`th scope=col`, status cell has a glyph plus a visually-hidden status word (`only in B`, `same`, ...), changed cells use `<del>`/`<ins>`. Measured contrast of the `only-b` glyph on its tinted row: 8.7 dark, **3.9 light** (it is a redundant, non-text cue next to the hidden text, so it meets WCAG 1.4.11's 3:1).
+- **R Assembly browser (fixture DLL).** The tree is a single tab stop (`role=tree`, `aria-current` on the selected type, Up/Down/Home/End/Enter work), role badges 7.4 / 4.9 contrast, members table, Decompile works in about 640 ms warm (first use loads the runtime), status text and a polite announcer say "Decompiled Contoso.Extensions.ContosoRoute. Esc returns to the assembly browser."
+- **R Search everywhere.** Ctrl+Shift+F focuses the box; typing a unique string gives `1 match in 1 item` in a polite status; Down moves into the hit (a button), Tab then goes to the case/regex/assemblies controls; clicking the hit opens the item and moves focus into the editor.
+- **R Other.** Image preview and Download (file `contoso-banner.jpg` saved, no request); `.esc` opens as text; unreferenced entries labelled "not in project.xml"; a bare `project.xml` still opens and lists 181 items.
+- **r Licences.** ICSharpCode.Decompiler 11.1.0.9782 is MIT (nuspec: "Copyright 2011-2026 AlphaSierraPapa", authors ILSpy Contributors); monaco-editor 0.57.0, vscode-textmate 9.3.2 and vscode-oniguruma 2.0.1 are MIT (the oniguruma wasm embeds Oniguruma 6.9.5, BSD 2-clause, per its `NOTICES.txt`); the .NET runtime files are MIT. README draft now has a third-party notice table and the rebuild steps (`pnpm build:decompiler`, .NET 8 SDK).
+
+### Findings
+
+**UI / UX (`src/app/`)**
+- [ ] **Medium, a11y (start screen).** The start zones come after the editor in the DOM and the editor behind the overlay is still tabbable, so Tab never reaches the zones. Repro (R): load `/`, press Tab 40 times: toolbar, pane headers, then `native-edit-context` forever (Tab inserts spaces into the hidden editor). Keyboard users can still use the pane **Open** buttons and Ctrl+O, but the zones themselves are unreachable. Fix: while the start screen is shown set `inert` on the editor (and pane headers) or place the start screen before them in the DOM, and focus the browse zone on load.
+- [ ] **Medium, a11y (overview).** `src/app/render.ts:204-207` gives the group buttons `role="listitem"` inside `role="list"`, which replaces their `button` role (screen readers announce a list item, not an actionable button). Fix: `<ul><li><button>` (or drop the roles and use a plain group).
+- [ ] **Medium, a11y (focus).** After a decompile finishes and after Back from decompiled code the focus is on `<body>` (R: the Decompile button is disabled and re-rendered, and the view swaps). Repro: open the fixture DLL, focus a type, press Decompile, wait; `document.activeElement` is `BODY`; press Alt+Left: still `BODY`. Fix: when the code opens, focus the editor (or the Back button); on Back focus the type in the tree (or the Decompile button that started it).
+- [ ] **Low, a11y.** `src/app/asm.ts:165-172` rewrites the `role="status"` text (`Decompiling X... N s`) every second while busy, which screen readers may read out repeatedly (read only). Fix: make the ticking seconds `aria-hidden` and rely on the one-time announcer messages, or announce only every 10 s.
+- [ ] **Low, a11y.** `asm.ts:254` puts a `<p role="status">` inside the `role="tree"`, which only allows `treeitem`/`group` children. Move the match count outside the tree.
+- [ ] **Low, a11y.** Empty header cells: `render.ts:32` and `render.ts:194` render `<th></th>` for the first column of the compare facts tables. Add visually-hidden text such as "Property".
+
+**Lead (`public/`, repo root)**
+- [ ] **Medium, licensing.** `dist/decompiler/_framework/` ships ICSharpCode.Decompiler (MIT), the .NET 8 runtime and `System.Reflection.Metadata` (MIT), and `dist/assets/onig-*.wasm` (BSD 2-clause Oniguruma), but no licence or notice text goes with them, and the repository has no `LICENSE`. MIT and BSD require the copyright notice and permission text to accompany copies and binaries. Fix: add `public/THIRD-PARTY-NOTICES.txt` (Vite copies `public/` into `dist/`) containing ICSharpCode.Decompiler's MIT licence, the .NET runtime's `THIRD-PARTY-NOTICES.TXT`, `vscode-oniguruma/NOTICES.txt`, and Monaco's `ThirdPartyNotices.txt` (codicon is CC BY 4.0), link it from the app footer or README, and add a root `LICENSE` of your choice. The README draft table lists the components.
+
+**Editor / Languages / QA**
+- No findings.
+
+### Not verified in pass 4
+Correctness of each summary kind's content (only the DAC table structure and compare rows were looked at; QA's oracle covers the data); decompiled-vs-decompiled diff per type in compare mode; searching DLL string literals and "Search in assemblies"; large real packages (not opened, by instruction); screen-reader output (names and roles read from the DOM); `pnpm build:decompiler` itself (needs the .NET SDK); `pnpm bench` and `pnpm e2e` (from the Lead's and QA's reports).
+
+## Pass 3 (history) (HEAD 9de3e3d: project explorer, item views, whole-text undo)
 
 Legend: **R** = I ran it (Playwright; dev server on 5317 and a production build served by `vite preview` from a temp dir), **r** = read only. Test data: `fixtures/project-a.xml` / `project-b.xml`, `large-*.xml`, `csharp-large-*.cs`. I did not open any real export.
 

@@ -13,6 +13,8 @@ Everything runs in the browser. There is no server, no account, no telemetry. Th
 - Options: ignore leading/trailing whitespace (default on), ignore all whitespace, word wrap, minimap, font size.
 - Languages: C#, XML, Plain Text, auto-detected on paste (XML if the first non-blank character is `<`, C# if the text starts with `using` or `namespace`). Override with the picker.
 - Dark theme by default, light theme toggle. Settings (labels, language, theme, options, context lines, font size) persist in `localStorage`. Pane text is not persisted.
+- Browse mode: open one customization `.zip` or `project.xml` and explore everything in it, with no Acumatica site needed. Compare mode also accepts zips.
+- Built-in assembly browser and C# decompiler for the DLLs in a package; search everywhere.
 - Project explorer for Acumatica exports: every item, what is missing on one side, one-click focused diffs per item.
 - Undo/redo of pastes, clears, loads and swaps.
 - Swap A/B, clear, copy, load a file (picker or drag-and-drop; read locally as text).
@@ -95,6 +97,58 @@ The drawer defaults to the **Changed** chip (everything except same); **All**, *
 
 **Undo for whole-text changes.** `Ctrl+Z` / `Ctrl+Y` undo and redo paste-replace, Clear, file load and drop, and Swap (one step for both sides). Typing still uses the editor's own undo first. The last 10 replacements (up to 300 MB of text) are kept, and a toast says what was undone.
 
+## Browse mode and `.zip` packages
+
+SideDiff opens a customization package the way Acumatica exports it: a `.zip` holding `project.xml` at the root plus every file at its `AppRelativePath` (`Bin/*.dll`, `Pages/XX/*.aspx` and `.cs`, `screens/...` Modern UI files, `App_Data/SnapshotConfigs/*.esc`, images). A bare `project.xml` still works too.
+
+- **Start screen.** With both sides empty you get two cards: **Browse a package** (one drop zone, "Drop a customization .zip or project.xml") and **Compare two packages** (zones for A and B). You can also drop files anywhere on the window, click a zone or press `Enter` on it, use `Ctrl+O`, or paste text with "paste or type text instead". Files are read in your browser; nothing is uploaded.
+- **Browse | Compare switch** in the toolbar (remembered). Browse shows one side: the explorer lists items without change statuses, an item opens in a single editor (find, folding, wrap, font size and theme still work), and the stats bar shows package facts (name, item count, size, version, warnings) instead of diff counts. Switching to Compare keeps what is loaded and asks for the second side.
+- **Everything in the zip is listed**, not only what `project.xml` references: files that are not referenced get a dim "not in project.xml" note and live in their own groups (Files, Assemblies, Images). A `File` element that points at a zip entry shows that entry's content (text, image, binary or assembly) and compares the content bytes; files that `project.xml` lists but the zip lacks are overview warnings. Each file item has a **Download** button that saves its original bytes (no network).
+- **Reading limits.** Entries are read with the browser's `DecompressionStream`; stored and deflate entries, and ZIP64 or encrypted archives are rejected with a message. CRC-32 is checked on read.
+- **Overview** is the first explorer entry and the default view after loading: name, kind, size, product version, items per group (click a group to filter the explorer), screens (click to open the page), assemblies (click to open the browser) and warnings. In compare mode it shows A and B columns and marks the differences with a glyph as well as colour.
+- **Other kinds of file:** images preview (with dimensions), other binary files show size, SHA-256 and the first 4 KB as hex, and text files such as `.esc`, `.json`, `.sql` open as text.
+
+## Summaries
+
+For items that are mostly data, the Code/XML switch gains a first **Summary** view: tables built from what is in the XML or ASPX, not guesses.
+
+| Item | Summary shows |
+|---|---|
+| DAC customization | one row per field: name, type, storage, display name, attributes |
+| New DAC or DAC extension (C#) | properties with their `[PX...]` attributes (best effort, parsed from the source; the summary says so) |
+| Table, SQL schema | columns with type, nullable, length, default; indexes for SQL |
+| Page (ASPX or Modern UI HTML) | screen id, title, `PXDataSource` type and primary view, then each container with its data member and fields in order |
+| Generic inquiry | design name, tables with aliases, relations, parameters, result columns, conditions |
+| Security (ScreenWithRights) | role and rights rows |
+| Site map and mobile site map | screen, title, URL, workspace, category |
+| anything else with attributes | a facts list |
+
+In compare mode the tables show rows matched by key; added, removed and changed rows are marked with a glyph and a hidden text label as well as colour, and changed cells show the old value struck through and the new one next to it.
+
+## Assembly browser and decompiler
+
+A DLL in a package (or one you add) opens as an **assembly browser** instead of text:
+
+- a namespace and type tree (arrow keys, `Home`/`End`), with Acumatica roles badged by base type: Graph, Graph extension of X, DAC, DAC extension of X (no Acumatica assemblies needed);
+- type details: base type, interfaces, attributes and members with C# style signatures;
+- search over types, members and string literals, and the IL for any method;
+- **Decompile**: shows the type (or the whole module) as C# in the read-only editor. It uses ICSharpCode.Decompiler (the ILSpy engine) compiled to WebAssembly, running in a dedicated worker in your browser. It is downloaded from the app's own `decompiler/` folder the first time you press Decompile (about 9 MB on disk, nothing is fetched before that), shows "Loading decompiler...", and makes no outside requests.
+- In compare mode an assembly shows a text outline diff (one line per type and member), and a decompiled diff per type on demand.
+
+**Limits to know about.** The decompiler only has the one assembly, not its references. `PX.*` (Acumatica) and most framework references are not available, so the output uses the names stored in metadata and sometimes contains comments such as "unknown result type" where an expression's type needed a missing reference. The code is readable and complete, but it does not always match what a fully referenced ILSpy would print.
+
+**Rebuilding the decompiler bundle.** `public/decompiler/` is committed, so `pnpm install` and `pnpm build` need only Node. To rebuild it (for example after changing `decompiler/` or upgrading ICSharpCode.Decompiler) install the .NET 8 SDK (`decompiler/global.json` pins 8.0.x) and run:
+
+```powershell
+pnpm build:decompiler
+```
+
+That publishes `decompiler/Decompiler.csproj` (Release, trimmed, no AOT) and replaces `public/decompiler/_framework`. Do not let git convert line endings in that folder (it is marked `-text`): `blazor.boot.json` lists integrity hashes of the files.
+
+## Search everywhere
+
+`Ctrl+Shift+F` opens one search box over every item: project.xml elements, decoded page sources, C# in CDATA, pretty-printed JSON, text files in the zip, and any assembly you have already opened (use "Search in assemblies" to load and search all DLLs). Literal by default, with case and regex toggles. Hits are grouped by item (with group and side) and clicking one opens the item at that line.
+
 ## Adding a language pack
 
 Bundled languages (`csharp`, `xml`, `plaintext`) need no network. Every other language is a *data-only* TextMate grammar (`.tmLanguage.json`) listed in `languages/manifest.json`. The app never downloads or runs JavaScript: grammars are tokenized by `vscode-textmate` with the `vscode-oniguruma` WASM that ships with the app (decision D5).
@@ -145,6 +199,22 @@ Measured by `pnpm bench` in headless Chromium on the 150k-line `large` pair (8.7
 | Initial JS, gzipped | < 3 MB (warning only) | 0.78 MB; lazy chunks: csharp, xml only |
 
 Two unrelated 150k-line files (every line differs) hit the diff budget and return an approximate result after about 10 s.
+
+## Third-party notices
+
+SideDiff bundles or ships these components, all under permissive licenses that require their notices to travel with copies (the repository itself has no `LICENSE` file yet; the Lead decides which to add):
+
+| Component | Version | License | Where |
+|---|---|---|---|
+| Monaco Editor | 0.57.0 | MIT (Microsoft) | editor, diff engine, C# and XML tokenizers |
+| Codicon icon font (inside Monaco) | bundled with Monaco | CC BY 4.0 icons, MIT code (Microsoft); see Monaco's `ThirdPartyNotices.txt` | `assets/codicon-*.ttf` |
+| vscode-textmate | 9.3.2 | MIT (Microsoft) | remote language packs |
+| vscode-oniguruma | 2.0.1 | MIT (Microsoft), wrapping Oniguruma 6.9.5 under a BSD 2-clause license (Copyright (c) 2002-2020 K.Kosako) | `assets/onig-*.wasm` |
+| ICSharpCode.Decompiler (ILSpy engine) | 11.1.0.9782 | MIT, Copyright 2011-2026 AlphaSierraPapa and ILSpy Contributors | `public/decompiler/_framework/ICSharpCode.Decompiler.wasm` |
+| System.Reflection.Metadata and the .NET 8 runtime (CoreLib, native runtime, the `System.*.wasm` assemblies) | 8.0.x runtime, 9.0 metadata | MIT (.NET Foundation and Microsoft) | `public/decompiler/_framework/` |
+| Language grammars installed on demand (SQL, JSON) | microsoft/vscode 1.140.0 | MIT (Microsoft) | fetched from jsDelivr only when you install them |
+
+When you redistribute a built `dist/` (or the repository), keep the full license texts with it: ICSharpCode.Decompiler's MIT license, the .NET runtime's `THIRD-PARTY-NOTICES.TXT` (it covers the components embedded in the runtime), Monaco's `ThirdPartyNotices.txt` and vscode-oniguruma's `NOTICES.txt`. See `docs/REVIEW.md` for the open item to ship these inside `dist/`.
 
 ## Privacy
 
