@@ -48,6 +48,16 @@ describe('project fixture', () => {
   it('has every element kind the contract classifies, plus unknown ones in other', () => {
     const elements = new Set(sidecar.items.map((i) => i.element));
     for (const e of ['Graph', 'DAC', 'File', 'PerTenantFile', 'Page', 'EditorUpdatedFields', 'Table', 'Sql', 'Report', 'SiteMapNode', 'GenericInquiryScreen', 'EntityEndpoint']) expect(elements, e).toContain(e);
+    // Phase 5 kinds and their groups.
+    const phase5: [string, string][] = [['ScreenWithRights', 'security'], ['Automation', 'screens'], ['MobileSiteMap', 'sitemap'], ['XportScenario', 'integration'], ['CSAttribute', 'tables'], ['DashboardV2', 'inquiries']];
+    for (const [e, g] of phase5) {
+      const its = sidecar.items.filter((i) => i.element === e);
+      expect(its.length, e).toBeGreaterThan(0);
+      expect(its.every((i) => i.group === g), e).toBe(true);
+    }
+    expect(item('ScreenWithRights:SO301000').status).toBe('modified');
+    expect(item('CSAttribute:CTZONE').status).toBe('modified');
+    expect(item('XportScenario:Contoso Export Carriers').status).toBe('only-a');
     const others = sidecar.items.filter((i) => i.group === 'other');
     expect(new Set(others.map((i) => i.element)).size).toBeGreaterThanOrEqual(2);
     expect(others.every((i) => i.detail === i.element)).toBe(true);
@@ -138,7 +148,7 @@ describe('project fixture', () => {
 
   it('one screen has a page, file references, Modern UI files, a site map entry and editor fields', () => {
     const elements = sidecar.relatedScreen.ids.map((id) => item(id).element).sort();
-    expect(elements).toEqual(['EditorUpdatedFields', 'File', 'File', 'Page', 'PerTenantFile', 'PerTenantFile', 'SiteMapNode']);
+    expect(elements).toEqual(['Automation', 'EditorUpdatedFields', 'File', 'File', 'MobileSiteMap', 'Page', 'PerTenantFile', 'PerTenantFile', 'ScreenWithRights', 'SiteMapNode']);
   });
 
   it('reformatted JSON is same; changed JSON is modified', () => {

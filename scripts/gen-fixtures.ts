@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { FIXTURE_SPECS, generatePair } from './lib/fixture-gen.ts';
 import type { ExpectedStats, GeneratedPair } from './lib/fixture-gen.ts';
 import { generateProjectPair, PROJECT_SEED } from './lib/project-gen.ts';
+import { generatePackagePair, PACKAGE_SEED } from './lib/package-gen.ts';
 import { monacoDiffStats, withinTolerance } from './lib/diff-stats.ts';
 import type { CountedStats, Tolerance } from './lib/diff-stats.ts';
 
@@ -24,7 +25,7 @@ const OUT = join(ROOT, 'fixtures');
 /** How far the app's stats may drift from `expected` (per stat). */
 export const TOLERANCE: Tolerance = { relative: 0.02, absolute: 3 };
 
-const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
+const sha256 = (s: string | Uint8Array): string => createHash('sha256').update(s).digest('hex');
 const lineCount = (s: string): number => s.split('\n').length;
 
 function monacoVersion(): string {
@@ -98,6 +99,7 @@ async function main(): Promise<void> {
     );
   }
   if (!only || only.includes('project')) writeProject();
+  if (!only || only.includes('package')) writePackage();
   if (failed) {
     console.error('gen-fixtures: monaco stats disagree with the constructed edits beyond tolerance');
     process.exit(1);
@@ -142,6 +144,42 @@ function writeProject(): void {
   console.log(
     `project       A ${lineCount(p.a)} lines ${(Buffer.byteLength(p.a) / 1024 / 1024).toFixed(2)} MB | B ${lineCount(p.b)} lines | ` +
       `${p.counts.total} items: same ${s.same}, modified ${s.modified}, whitespace ${s.whitespace}, only-a ${s['only-a']}, only-b ${s['only-b']} | ${Math.round(performance.now() - t0)} ms`,
+  );
+}
+
+/** The package pair (Phase 5): package-a.zip, package-b.zip, package.changes.json. */
+function writePackage(): void {
+  const t0 = performance.now();
+  const statics = {
+    dllA: readFileSync(join(OUT, 'static/Contoso.Extensions.dll')),
+    dllB: readFileSync(join(OUT, 'static/Contoso.Extensions.B.dll')),
+    jpg: readFileSync(join(OUT, 'static/contoso-banner.jpg')),
+  };
+  const p = generatePackagePair(statics);
+  for (const side of ['a', 'b'] as const) writeFileSync(join(OUT, `package-${side}.zip`), p.zips[side]);
+  const sidecar = {
+    fixture: 'package',
+    kind: 'package',
+    seed: PACKAGE_SEED,
+    generator: 'scripts/gen-fixtures.ts (scripts/lib/package-gen.ts, scripts/lib/zip.ts)',
+    a: { file: 'package-a.zip', bytes: p.zips.a.length, sha256: sha256(p.zips.a), entries: p.entries.a },
+    b: { file: 'package-b.zip', bytes: p.zips.b.length, sha256: sha256(p.zips.b), entries: p.entries.b },
+    counts: p.counts,
+    overview: p.overview,
+    searches: p.searches,
+    edits: p.edits,
+    items: p.items,
+    notes:
+      'project.xml in each zip is fixtures/project-a.xml / -b.xml. Items are the project items, with File/PerTenantFile items whose file is in the zip compared by content ' +
+      '(views: code | image | assembly | binary, then xml), plus Zip:<path> items for files project.xml does not reference (group by kind; detail "not in project.xml"). ' +
+      '`sides` says which zips hold an item; zip items have no line ranges. `loose` lists fields the contract leaves open for that item. ' +
+      'Overview: counts per group are exact; screensInclude / warningsInclude are minimums. Pages/PO/PO302000.aspx is referenced but missing from both zips.',
+  };
+  writeFileSync(join(OUT, 'package.changes.json'), JSON.stringify(sidecar, null, 2) + '\n');
+  const st = p.counts.byStatus;
+  console.log(
+    `package       A ${(p.zips.a.length / 1024).toFixed(0)} KB, ${p.entries.a.length} entries | B ${(p.zips.b.length / 1024).toFixed(0)} KB, ${p.entries.b.length} entries | ` +
+      `${p.counts.total} items: same ${st.same}, modified ${st.modified}, whitespace ${st.whitespace}, only-a ${st['only-a']}, only-b ${st['only-b']} | ${Math.round(performance.now() - t0)} ms`,
   );
 }
 

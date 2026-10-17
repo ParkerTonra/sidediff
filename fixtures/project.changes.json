@@ -5,9 +5,9 @@
   "generator": "scripts/gen-fixtures.ts (scripts/lib/project-gen.ts)",
   "a": {
     "file": "project-a.xml",
-    "lines": 19886,
-    "bytes": 1036547,
-    "sha256": "59b2964274439eac52ca6028d11755afd99be8fba1e17f53b7b240c76b479252",
+    "lines": 20067,
+    "bytes": 1045848,
+    "sha256": "45cfef8cf257ca7faaba8a15133e4ec524fe9deff9f24c3b1b2193d32947a98e",
     "root": {
       "level": "99",
       "description": "",
@@ -16,9 +16,9 @@
   },
   "b": {
     "file": "project-b.xml",
-    "lines": 19437,
-    "bytes": 1011687,
-    "sha256": "5976ca11065536d992e29e6232b3298241aa9ad54cb6655eb910631793918fc9",
+    "lines": 19600,
+    "bytes": 1020120,
+    "sha256": "17450b53f5d2509674180a2423f5a756df4db8bc7ae5471f4ff11f391f1c01be",
     "root": {
       "level": "99",
       "description": "",
@@ -26,24 +26,25 @@
     }
   },
   "counts": {
-    "total": 174,
+    "total": 186,
     "byStatus": {
-      "same": 135,
+      "same": 144,
       "whitespace": 4,
-      "modified": 23,
-      "only-a": 7,
+      "modified": 25,
+      "only-a": 8,
       "only-b": 5
     },
     "byGroup": {
       "code": 88,
-      "screens": 26,
-      "tables": 20,
+      "screens": 28,
+      "tables": 22,
       "sql": 8,
       "reports": 4,
-      "inquiries": 5,
-      "sitemap": 8,
-      "integration": 3,
-      "files": 9,
+      "inquiries": 6,
+      "sitemap": 9,
+      "integration": 5,
+      "security": 3,
+      "files": 10,
       "other": 3
     }
   },
@@ -56,8 +57,11 @@
     "ids": [
       "File:Pages\\SO\\SO301000.aspx.cs",
       "Page:~/Pages/SO/SO301000.aspx",
+      "Automation:SO301000",
       "EditorUpdatedFields:SO301000",
+      "MobileSiteMap:SO301000",
       "SiteMapNode:SO301000",
+      "ScreenWithRights:SO301000",
       "File:Pages\\SO\\SO301000.aspx",
       "PerTenantFile:screens\\SO\\SO301000\\SO301000.html",
       "PerTenantFile:screens\\SO\\SO301000\\SO301000.ts"
@@ -74,8 +78,9 @@
       "BAccountCarrier4",
       "App_Code\\Caches\\APInvoiceRoute2.cs",
       "PO156080",
-      "AP308234",
-      "screens\\PO\\PO302000\\PO302000.ts"
+      "AP425060",
+      "screens\\PO\\PO302000\\PO302000.ts",
+      "Contoso Export Carriers"
     ],
     "onlyB": [
       "ContosoEndpoint@24.200.001",
@@ -107,7 +112,9 @@
       "AR242798",
       "CT-CarrierApproval0",
       "ContosoEndpoint",
-      "Web.config.transform"
+      "Web.config.transform",
+      "SO301000",
+      "CTZONE"
     ],
     "whitespace": [
       "INReceiptEntry_CarrierExt3",
@@ -2065,12 +2072,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19050,
-        "endLine": 19050
+        "startLine": 19051,
+        "endLine": 19051
       },
       "b": {
-        "startLine": 18558,
-        "endLine": 18558
+        "startLine": 18559,
+        "endLine": 18559
       }
     },
     {
@@ -2088,12 +2095,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19051,
-        "endLine": 19053
+        "startLine": 19052,
+        "endLine": 19054
       },
       "b": {
-        "startLine": 18559,
-        "endLine": 18561
+        "startLine": 18560,
+        "endLine": 18562
       }
     },
     {
@@ -2110,12 +2117,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19067,
-        "endLine": 19067
+        "startLine": 19068,
+        "endLine": 19068
       },
       "b": {
-        "startLine": 18574,
-        "endLine": 18574
+        "startLine": 18575,
+        "endLine": 18575
       }
     },
     {
@@ -2132,12 +2139,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19060,
-        "endLine": 19060
+        "startLine": 19061,
+        "endLine": 19061
       },
       "b": {
-        "startLine": 18567,
-        "endLine": 18567
+        "startLine": 18568,
+        "endLine": 18568
       }
     },
     {
@@ -2155,12 +2162,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19063,
-        "endLine": 19065
+        "startLine": 19064,
+        "endLine": 19066
       },
       "b": {
-        "startLine": 18570,
-        "endLine": 18572
+        "startLine": 18571,
+        "endLine": 18573
       }
     },
     {
@@ -2177,12 +2184,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19068,
-        "endLine": 19068
+        "startLine": 19069,
+        "endLine": 19069
       },
       "b": {
-        "startLine": 18575,
-        "endLine": 18575
+        "startLine": 18576,
+        "endLine": 18576
       }
     },
     {
@@ -2199,12 +2206,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19076,
-        "endLine": 19076
+        "startLine": 19077,
+        "endLine": 19077
       },
       "b": {
-        "startLine": 18607,
-        "endLine": 18607
+        "startLine": 18608,
+        "endLine": 18608
       }
     },
     {
@@ -2221,12 +2228,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19062,
-        "endLine": 19062
+        "startLine": 19063,
+        "endLine": 19063
       },
       "b": {
-        "startLine": 18569,
-        "endLine": 18569
+        "startLine": 18570,
+        "endLine": 18570
       }
     },
     {
@@ -2243,12 +2250,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19061,
-        "endLine": 19061
+        "startLine": 19062,
+        "endLine": 19062
       },
       "b": {
-        "startLine": 18568,
-        "endLine": 18568
+        "startLine": 18569,
+        "endLine": 18569
       }
     },
     {
@@ -2265,12 +2272,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19049,
-        "endLine": 19049
+        "startLine": 19050,
+        "endLine": 19050
       },
       "b": {
-        "startLine": 18557,
-        "endLine": 18557
+        "startLine": 18558,
+        "endLine": 18558
       }
     },
     {
@@ -2287,12 +2294,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19055,
-        "endLine": 19055
+        "startLine": 19056,
+        "endLine": 19056
       },
       "b": {
-        "startLine": 18562,
-        "endLine": 18562
+        "startLine": 18563,
+        "endLine": 18563
       }
     },
     {
@@ -2310,12 +2317,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19069,
-        "endLine": 19071
+        "startLine": 19070,
+        "endLine": 19072
       },
       "b": {
-        "startLine": 18576,
-        "endLine": 18578
+        "startLine": 18577,
+        "endLine": 18579
       }
     },
     {
@@ -2332,8 +2339,8 @@
         "xml"
       ],
       "a": {
-        "startLine": 19044,
-        "endLine": 19044
+        "startLine": 19045,
+        "endLine": 19045
       },
       "b": null
     },
@@ -2352,12 +2359,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19057,
-        "endLine": 19059
+        "startLine": 19058,
+        "endLine": 19060
       },
       "b": {
-        "startLine": 18564,
-        "endLine": 18566
+        "startLine": 18565,
+        "endLine": 18567
       }
     },
     {
@@ -2374,8 +2381,8 @@
         "xml"
       ],
       "a": {
-        "startLine": 19054,
-        "endLine": 19054
+        "startLine": 19055,
+        "endLine": 19055
       },
       "b": {
         "startLine": 4887,
@@ -2396,12 +2403,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19072,
-        "endLine": 19072
+        "startLine": 19073,
+        "endLine": 19073
       },
       "b": {
-        "startLine": 18579,
-        "endLine": 18579
+        "startLine": 18580,
+        "endLine": 18580
       }
     },
     {
@@ -2418,12 +2425,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19042,
-        "endLine": 19042
+        "startLine": 19043,
+        "endLine": 19043
       },
       "b": {
-        "startLine": 18551,
-        "endLine": 18551
+        "startLine": 18552,
+        "endLine": 18552
       }
     },
     {
@@ -2440,12 +2447,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19043,
-        "endLine": 19043
+        "startLine": 19044,
+        "endLine": 19044
       },
       "b": {
-        "startLine": 18552,
-        "endLine": 18552
+        "startLine": 18553,
+        "endLine": 18553
       }
     },
     {
@@ -2463,12 +2470,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19045,
-        "endLine": 19047
+        "startLine": 19046,
+        "endLine": 19048
       },
       "b": {
-        "startLine": 18553,
-        "endLine": 18555
+        "startLine": 18554,
+        "endLine": 18556
       }
     },
     {
@@ -2485,13 +2492,37 @@
         "xml"
       ],
       "a": {
-        "startLine": 19073,
-        "endLine": 19073
+        "startLine": 19074,
+        "endLine": 19074
       },
       "b": {
-        "startLine": 18580,
-        "endLine": 18580
+        "startLine": 18581,
+        "endLine": 18581
       }
+    },
+    {
+      "id": "Automation:PO302000",
+      "element": "Automation",
+      "key": "PO302000",
+      "group": "screens",
+      "name": "PO302000 automation",
+      "detail": "",
+      "screenId": "PO302000",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19948,
+        "endLine": 19958
+      },
+      "b": {
+        "startLine": 19493,
+        "endLine": 19503
+      },
+      "loose": [
+        "detail"
+      ]
     },
     {
       "id": "EditorUpdatedFields:PO302000",
@@ -2507,12 +2538,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19075,
-        "endLine": 19075
+        "startLine": 19076,
+        "endLine": 19076
       },
       "b": {
-        "startLine": 18582,
-        "endLine": 18606
+        "startLine": 18583,
+        "endLine": 18607
       }
     },
     {
@@ -2529,12 +2560,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19056,
-        "endLine": 19056
+        "startLine": 19057,
+        "endLine": 19057
       },
       "b": {
-        "startLine": 18563,
-        "endLine": 18563
+        "startLine": 18564,
+        "endLine": 18564
       }
     },
     {
@@ -2551,12 +2582,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19066,
-        "endLine": 19066
+        "startLine": 19067,
+        "endLine": 19067
       },
       "b": {
-        "startLine": 18573,
-        "endLine": 18573
+        "startLine": 18574,
+        "endLine": 18574
       }
     },
     {
@@ -2574,13 +2605,37 @@
         "xml"
       ],
       "a": {
-        "startLine": 19039,
-        "endLine": 19041
+        "startLine": 19040,
+        "endLine": 19042
       },
       "b": {
-        "startLine": 18548,
-        "endLine": 18550
+        "startLine": 18549,
+        "endLine": 18551
       }
+    },
+    {
+      "id": "Automation:SO301000",
+      "element": "Automation",
+      "key": "SO301000",
+      "group": "screens",
+      "name": "SO301000 automation",
+      "detail": "",
+      "screenId": "SO301000",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19937,
+        "endLine": 19947
+      },
+      "b": {
+        "startLine": 19482,
+        "endLine": 19492
+      },
+      "loose": [
+        "detail"
+      ]
     },
     {
       "id": "EditorUpdatedFields:SO301000",
@@ -2596,12 +2651,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19074,
-        "endLine": 19074
+        "startLine": 19075,
+        "endLine": 19075
       },
       "b": {
-        "startLine": 18581,
-        "endLine": 18581
+        "startLine": 18582,
+        "endLine": 18582
       }
     },
     {
@@ -2618,12 +2673,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19048,
-        "endLine": 19048
+        "startLine": 19049,
+        "endLine": 19049
       },
       "b": {
-        "startLine": 18556,
-        "endLine": 18556
+        "startLine": 18557,
+        "endLine": 18557
       }
     },
     {
@@ -2639,12 +2694,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19111,
-        "endLine": 19124
+        "startLine": 19112,
+        "endLine": 19125
       },
       "b": {
-        "startLine": 18642,
-        "endLine": 18655
+        "startLine": 18643,
+        "endLine": 18656
       }
     },
     {
@@ -2660,8 +2715,8 @@
         "xml"
       ],
       "a": {
-        "startLine": 19125,
-        "endLine": 19133
+        "startLine": 19126,
+        "endLine": 19134
       },
       "b": null
     },
@@ -2678,12 +2733,54 @@
         "xml"
       ],
       "a": {
-        "startLine": 19238,
-        "endLine": 19245
+        "startLine": 19239,
+        "endLine": 19246
       },
       "b": {
-        "startLine": 18751,
-        "endLine": 18758
+        "startLine": 18752,
+        "endLine": 18759
+      }
+    },
+    {
+      "id": "CSAttribute:CTCOLOR",
+      "element": "CSAttribute",
+      "key": "CTCOLOR",
+      "group": "tables",
+      "name": "CTCOLOR",
+      "detail": "Attribute · Route Color",
+      "screenId": null,
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 20003,
+        "endLine": 20021
+      },
+      "b": {
+        "startLine": 19529,
+        "endLine": 19547
+      }
+    },
+    {
+      "id": "CSAttribute:CTZONE",
+      "element": "CSAttribute",
+      "key": "CTZONE",
+      "group": "tables",
+      "name": "CTZONE",
+      "detail": "Attribute · Delivery Zone",
+      "screenId": null,
+      "status": "modified",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 20022,
+        "endLine": 20039
+      },
+      "b": {
+        "startLine": 19548,
+        "endLine": 19566
       }
     },
     {
@@ -2699,12 +2796,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19288,
-        "endLine": 19301
+        "startLine": 19289,
+        "endLine": 19302
       },
       "b": {
-        "startLine": 18801,
-        "endLine": 18814
+        "startLine": 18802,
+        "endLine": 18815
       }
     },
     {
@@ -2720,12 +2817,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19261,
-        "endLine": 19272
+        "startLine": 19262,
+        "endLine": 19273
       },
       "b": {
-        "startLine": 18774,
-        "endLine": 18785
+        "startLine": 18775,
+        "endLine": 18786
       }
     },
     {
@@ -2741,12 +2838,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19273,
-        "endLine": 19287
+        "startLine": 19274,
+        "endLine": 19288
       },
       "b": {
-        "startLine": 18786,
-        "endLine": 18800
+        "startLine": 18787,
+        "endLine": 18801
       }
     },
     {
@@ -2762,12 +2859,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19101,
-        "endLine": 19110
+        "startLine": 19102,
+        "endLine": 19111
       },
       "b": {
-        "startLine": 18632,
-        "endLine": 18641
+        "startLine": 18633,
+        "endLine": 18642
       }
     },
     {
@@ -2783,12 +2880,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19246,
-        "endLine": 19260
+        "startLine": 19247,
+        "endLine": 19261
       },
       "b": {
-        "startLine": 18759,
-        "endLine": 18773
+        "startLine": 18760,
+        "endLine": 18774
       }
     },
     {
@@ -2804,12 +2901,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19209,
-        "endLine": 19216
+        "startLine": 19210,
+        "endLine": 19217
       },
       "b": {
-        "startLine": 18723,
-        "endLine": 18730
+        "startLine": 18724,
+        "endLine": 18731
       }
     },
     {
@@ -2825,12 +2922,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19224,
-        "endLine": 19237
+        "startLine": 19225,
+        "endLine": 19238
       },
       "b": {
-        "startLine": 18737,
-        "endLine": 18750
+        "startLine": 18738,
+        "endLine": 18751
       }
     },
     {
@@ -2846,12 +2943,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19134,
-        "endLine": 19145
+        "startLine": 19135,
+        "endLine": 19146
       },
       "b": {
-        "startLine": 18656,
-        "endLine": 18667
+        "startLine": 18657,
+        "endLine": 18668
       }
     },
     {
@@ -2867,12 +2964,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19164,
-        "endLine": 19172
+        "startLine": 19165,
+        "endLine": 19173
       },
       "b": {
-        "startLine": 19427,
-        "endLine": 19435
+        "startLine": 19590,
+        "endLine": 19598
       }
     },
     {
@@ -2888,12 +2985,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19159,
-        "endLine": 19163
+        "startLine": 19160,
+        "endLine": 19164
       },
       "b": {
-        "startLine": 18682,
-        "endLine": 18686
+        "startLine": 18683,
+        "endLine": 18687
       }
     },
     {
@@ -2909,12 +3006,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19197,
-        "endLine": 19208
+        "startLine": 19198,
+        "endLine": 19209
       },
       "b": {
-        "startLine": 18711,
-        "endLine": 18722
+        "startLine": 18712,
+        "endLine": 18723
       }
     },
     {
@@ -2930,12 +3027,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19077,
-        "endLine": 19089
+        "startLine": 19078,
+        "endLine": 19090
       },
       "b": {
-        "startLine": 18608,
-        "endLine": 18620
+        "startLine": 18609,
+        "endLine": 18621
       }
     },
     {
@@ -2951,12 +3048,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19217,
-        "endLine": 19223
+        "startLine": 19218,
+        "endLine": 19224
       },
       "b": {
-        "startLine": 18731,
-        "endLine": 18736
+        "startLine": 18732,
+        "endLine": 18737
       }
     },
     {
@@ -2972,12 +3069,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19090,
-        "endLine": 19100
+        "startLine": 19091,
+        "endLine": 19101
       },
       "b": {
-        "startLine": 18621,
-        "endLine": 18631
+        "startLine": 18622,
+        "endLine": 18632
       }
     },
     {
@@ -2993,12 +3090,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19173,
-        "endLine": 19187
+        "startLine": 19174,
+        "endLine": 19188
       },
       "b": {
-        "startLine": 18687,
-        "endLine": 18701
+        "startLine": 18688,
+        "endLine": 18702
       }
     },
     {
@@ -3014,12 +3111,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19146,
-        "endLine": 19158
+        "startLine": 19147,
+        "endLine": 19159
       },
       "b": {
-        "startLine": 18668,
-        "endLine": 18681
+        "startLine": 18669,
+        "endLine": 18682
       }
     },
     {
@@ -3035,12 +3132,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19188,
-        "endLine": 19196
+        "startLine": 19189,
+        "endLine": 19197
       },
       "b": {
-        "startLine": 18702,
-        "endLine": 18710
+        "startLine": 18703,
+        "endLine": 18711
       }
     },
     {
@@ -3057,12 +3154,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19436,
-        "endLine": 19453
+        "startLine": 19437,
+        "endLine": 19454
       },
       "b": {
-        "startLine": 18950,
-        "endLine": 18967
+        "startLine": 18951,
+        "endLine": 18968
       }
     },
     {
@@ -3079,12 +3176,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19416,
-        "endLine": 19435
+        "startLine": 19417,
+        "endLine": 19436
       },
       "b": {
-        "startLine": 18930,
-        "endLine": 18949
+        "startLine": 18931,
+        "endLine": 18950
       }
     },
     {
@@ -3101,12 +3198,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19302,
-        "endLine": 19331
+        "startLine": 19303,
+        "endLine": 19332
       },
       "b": {
-        "startLine": 18815,
-        "endLine": 18844
+        "startLine": 18816,
+        "endLine": 18845
       }
     },
     {
@@ -3123,12 +3220,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19352,
-        "endLine": 19378
+        "startLine": 19353,
+        "endLine": 19379
       },
       "b": {
-        "startLine": 18866,
-        "endLine": 18892
+        "startLine": 18867,
+        "endLine": 18893
       }
     },
     {
@@ -3145,12 +3242,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19332,
-        "endLine": 19351
+        "startLine": 19333,
+        "endLine": 19352
       },
       "b": {
-        "startLine": 18845,
-        "endLine": 18865
+        "startLine": 18846,
+        "endLine": 18866
       }
     },
     {
@@ -3167,12 +3264,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19397,
-        "endLine": 19415
+        "startLine": 19398,
+        "endLine": 19416
       },
       "b": {
-        "startLine": 18911,
-        "endLine": 18929
+        "startLine": 18912,
+        "endLine": 18930
       }
     },
     {
@@ -3190,8 +3287,8 @@
       ],
       "a": null,
       "b": {
-        "startLine": 19203,
-        "endLine": 19220
+        "startLine": 19427,
+        "endLine": 19444
       }
     },
     {
@@ -3208,12 +3305,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19379,
-        "endLine": 19396
+        "startLine": 19380,
+        "endLine": 19397
       },
       "b": {
-        "startLine": 18893,
-        "endLine": 18910
+        "startLine": 18894,
+        "endLine": 18911
       }
     },
     {
@@ -3230,12 +3327,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19454,
-        "endLine": 19506
+        "startLine": 19455,
+        "endLine": 19507
       },
       "b": {
-        "startLine": 18968,
-        "endLine": 19020
+        "startLine": 18969,
+        "endLine": 19021
       }
     },
     {
@@ -3252,12 +3349,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19507,
-        "endLine": 19533
+        "startLine": 19508,
+        "endLine": 19534
       },
       "b": {
-        "startLine": 19021,
-        "endLine": 19047
+        "startLine": 19022,
+        "endLine": 19048
       }
     },
     {
@@ -3274,12 +3371,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19534,
-        "endLine": 19570
+        "startLine": 19535,
+        "endLine": 19571
       },
       "b": {
-        "startLine": 19048,
-        "endLine": 19084
+        "startLine": 19049,
+        "endLine": 19085
       }
     },
     {
@@ -3296,12 +3393,33 @@
         "xml"
       ],
       "a": {
-        "startLine": 19571,
-        "endLine": 19598
+        "startLine": 19572,
+        "endLine": 19599
       },
       "b": {
-        "startLine": 19085,
-        "endLine": 19112
+        "startLine": 19086,
+        "endLine": 19113
+      }
+    },
+    {
+      "id": "DashboardV2:Contoso Sales Overview",
+      "element": "DashboardV2",
+      "key": "Contoso Sales Overview",
+      "group": "inquiries",
+      "name": "Contoso Sales Overview",
+      "detail": "Dashboard",
+      "screenId": null,
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 20040,
+        "endLine": 20059
+      },
+      "b": {
+        "startLine": 19567,
+        "endLine": 19586
       }
     },
     {
@@ -3310,19 +3428,19 @@
       "key": "CT-BatchInventory4",
       "group": "inquiries",
       "name": "CT-BatchInventory4",
-      "detail": "",
+      "detail": "Generic inquiry",
       "screenId": null,
       "status": "same",
       "views": [
         "xml"
       ],
       "a": {
-        "startLine": 19824,
-        "endLine": 19852
+        "startLine": 19825,
+        "endLine": 19853
       },
       "b": {
-        "startLine": 19360,
-        "endLine": 19388
+        "startLine": 19325,
+        "endLine": 19353
       }
     },
     {
@@ -3331,19 +3449,19 @@
       "key": "CT-BatchWarranty1",
       "group": "inquiries",
       "name": "CT-BatchWarranty1",
-      "detail": "",
+      "detail": "Generic inquiry",
       "screenId": null,
       "status": "same",
       "views": [
         "xml"
       ],
       "a": {
-        "startLine": 19731,
-        "endLine": 19760
+        "startLine": 19732,
+        "endLine": 19761
       },
       "b": {
-        "startLine": 19267,
-        "endLine": 19296
+        "startLine": 19232,
+        "endLine": 19261
       }
     },
     {
@@ -3352,19 +3470,19 @@
       "key": "CT-CarrierApproval0",
       "group": "inquiries",
       "name": "CT-CarrierApproval0",
-      "detail": "",
+      "detail": "Generic inquiry",
       "screenId": null,
       "status": "modified",
       "views": [
         "xml"
       ],
       "a": {
-        "startLine": 19704,
-        "endLine": 19730
+        "startLine": 19705,
+        "endLine": 19731
       },
       "b": {
-        "startLine": 19239,
-        "endLine": 19266
+        "startLine": 19204,
+        "endLine": 19231
       }
     },
     {
@@ -3373,19 +3491,19 @@
       "key": "CT-FreightFreight2",
       "group": "inquiries",
       "name": "CT-FreightFreight2",
-      "detail": "",
+      "detail": "Generic inquiry",
       "screenId": null,
       "status": "same",
       "views": [
         "xml"
       ],
       "a": {
-        "startLine": 19761,
-        "endLine": 19792
+        "startLine": 19762,
+        "endLine": 19793
       },
       "b": {
-        "startLine": 19297,
-        "endLine": 19328
+        "startLine": 19262,
+        "endLine": 19293
       }
     },
     {
@@ -3394,19 +3512,19 @@
       "key": "CT-InventoryCustomer3",
       "group": "inquiries",
       "name": "CT-InventoryCustomer3",
-      "detail": "",
+      "detail": "Generic inquiry",
       "screenId": null,
       "status": "same",
       "views": [
         "xml"
       ],
       "a": {
-        "startLine": 19793,
-        "endLine": 19823
+        "startLine": 19794,
+        "endLine": 19824
       },
       "b": {
-        "startLine": 19329,
-        "endLine": 19359
+        "startLine": 19294,
+        "endLine": 19324
       }
     },
     {
@@ -3422,12 +3540,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19659,
-        "endLine": 19673
+        "startLine": 19660,
+        "endLine": 19674
       },
       "b": {
-        "startLine": 19158,
-        "endLine": 19172
+        "startLine": 19159,
+        "endLine": 19173
       }
     },
     {
@@ -3443,12 +3561,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19629,
-        "endLine": 19643
+        "startLine": 19630,
+        "endLine": 19644
       },
       "b": {
-        "startLine": 19128,
-        "endLine": 19142
+        "startLine": 19129,
+        "endLine": 19143
       }
     },
     {
@@ -3464,12 +3582,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19674,
-        "endLine": 19688
+        "startLine": 19675,
+        "endLine": 19689
       },
       "b": {
-        "startLine": 19173,
-        "endLine": 19187
+        "startLine": 19174,
+        "endLine": 19188
       }
     },
     {
@@ -3485,12 +3603,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19689,
-        "endLine": 19703
+        "startLine": 19690,
+        "endLine": 19704
       },
       "b": {
-        "startLine": 19188,
-        "endLine": 19202
+        "startLine": 19189,
+        "endLine": 19203
       }
     },
     {
@@ -3506,8 +3624,8 @@
         "xml"
       ],
       "a": {
-        "startLine": 19614,
-        "endLine": 19628
+        "startLine": 19615,
+        "endLine": 19629
       },
       "b": null
     },
@@ -3524,12 +3642,33 @@
         "xml"
       ],
       "a": {
-        "startLine": 19644,
-        "endLine": 19658
+        "startLine": 19645,
+        "endLine": 19659
       },
       "b": {
-        "startLine": 19143,
-        "endLine": 19157
+        "startLine": 19144,
+        "endLine": 19158
+      }
+    },
+    {
+      "id": "MobileSiteMap:SO301000",
+      "element": "MobileSiteMap",
+      "key": "SO301000",
+      "group": "sitemap",
+      "name": "SO301000",
+      "detail": "Mobile site map",
+      "screenId": "SO301000",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19959,
+        "endLine": 19962
+      },
+      "b": {
+        "startLine": 19504,
+        "endLine": 19507
       }
     },
     {
@@ -3545,12 +3684,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19599,
-        "endLine": 19613
+        "startLine": 19600,
+        "endLine": 19614
       },
       "b": {
-        "startLine": 19113,
-        "endLine": 19127
+        "startLine": 19114,
+        "endLine": 19128
       }
     },
     {
@@ -3567,8 +3706,47 @@
       ],
       "a": null,
       "b": {
-        "startLine": 19221,
-        "endLine": 19235
+        "startLine": 19445,
+        "endLine": 19459
+      }
+    },
+    {
+      "id": "XportScenario:Contoso Export Carriers",
+      "element": "XportScenario",
+      "key": "Contoso Export Carriers",
+      "group": "integration",
+      "name": "Contoso Export Carriers",
+      "detail": "Scenario · SM206025",
+      "screenId": "SM206025",
+      "status": "only-a",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19984,
+        "endLine": 20002
+      },
+      "b": null
+    },
+    {
+      "id": "XportScenario:Contoso Import Routes",
+      "element": "XportScenario",
+      "key": "Contoso Import Routes",
+      "group": "integration",
+      "name": "Contoso Import Routes",
+      "detail": "Scenario · SM206025",
+      "screenId": "SM206025",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19963,
+        "endLine": 19983
+      },
+      "b": {
+        "startLine": 19508,
+        "endLine": 19528
       }
     },
     {
@@ -3584,12 +3762,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19853,
-        "endLine": 19866
+        "startLine": 19854,
+        "endLine": 19867
       },
       "b": {
-        "startLine": 19389,
-        "endLine": 19401
+        "startLine": 19354,
+        "endLine": 19366
       }
     },
     {
@@ -3606,8 +3784,8 @@
       ],
       "a": null,
       "b": {
-        "startLine": 19402,
-        "endLine": 19411
+        "startLine": 19367,
+        "endLine": 19376
       }
     },
     {
@@ -3623,12 +3801,75 @@
         "xml"
       ],
       "a": {
-        "startLine": 19867,
-        "endLine": 19878
+        "startLine": 19868,
+        "endLine": 19879
       },
       "b": {
-        "startLine": 19412,
-        "endLine": 19423
+        "startLine": 19377,
+        "endLine": 19388
+      }
+    },
+    {
+      "id": "ScreenWithRights:AR303000",
+      "element": "ScreenWithRights",
+      "key": "AR303000",
+      "group": "security",
+      "name": "AR303000",
+      "detail": "Access rights · Customer Credit",
+      "screenId": "AR303000",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19918,
+        "endLine": 19936
+      },
+      "b": {
+        "startLine": 19463,
+        "endLine": 19481
+      }
+    },
+    {
+      "id": "ScreenWithRights:PO302000",
+      "element": "ScreenWithRights",
+      "key": "PO302000",
+      "group": "security",
+      "name": "PO302000",
+      "detail": "Access rights · Purchase Receipts",
+      "screenId": "PO302000",
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19899,
+        "endLine": 19917
+      },
+      "b": {
+        "startLine": 19408,
+        "endLine": 19426
+      }
+    },
+    {
+      "id": "ScreenWithRights:SO301000",
+      "element": "ScreenWithRights",
+      "key": "SO301000",
+      "group": "security",
+      "name": "SO301000",
+      "detail": "Access rights · Orders & Returns",
+      "screenId": "SO301000",
+      "status": "modified",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19880,
+        "endLine": 19898
+      },
+      "b": {
+        "startLine": 19389,
+        "endLine": 19407
       }
     },
     {
@@ -3651,6 +3892,27 @@
       "b": {
         "startLine": 18530,
         "endLine": 18536
+      }
+    },
+    {
+      "id": "File:Images\\contoso-logo.png",
+      "element": "File",
+      "key": "Images\\contoso-logo.png",
+      "group": "files",
+      "name": "contoso-logo.png",
+      "detail": "Images\\contoso-logo.png",
+      "screenId": null,
+      "status": "same",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 19036,
+        "endLine": 19036
+      },
+      "b": {
+        "startLine": 18546,
+        "endLine": 18546
       }
     },
     {
@@ -3708,8 +3970,8 @@
         "xml"
       ],
       "a": {
-        "startLine": 19038,
-        "endLine": 19038
+        "startLine": 19039,
+        "endLine": 19039
       },
       "b": null
     },
@@ -3769,12 +4031,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19037,
-        "endLine": 19037
+        "startLine": 19038,
+        "endLine": 19038
       },
       "b": {
-        "startLine": 18547,
-        "endLine": 18547
+        "startLine": 18548,
+        "endLine": 18548
       }
     },
     {
@@ -3790,12 +4052,12 @@
         "xml"
       ],
       "a": {
-        "startLine": 19036,
-        "endLine": 19036
+        "startLine": 19037,
+        "endLine": 19037
       },
       "b": {
-        "startLine": 18546,
-        "endLine": 18546
+        "startLine": 18547,
+        "endLine": 18547
       }
     },
     {
@@ -3821,29 +4083,11 @@
       }
     },
     {
-      "id": "MobileSiteMapNode:AP308234",
+      "id": "MobileSiteMapNode:AP245788",
       "element": "MobileSiteMapNode",
-      "key": "AP308234",
+      "key": "AP245788",
       "group": "other",
-      "name": "AP308234",
-      "detail": "MobileSiteMapNode",
-      "screenId": null,
-      "status": "only-a",
-      "views": [
-        "xml"
-      ],
-      "a": {
-        "startLine": 19882,
-        "endLine": 19884
-      },
-      "b": null
-    },
-    {
-      "id": "MobileSiteMapNode:AR117618",
-      "element": "MobileSiteMapNode",
-      "key": "AR117618",
-      "group": "other",
-      "name": "AR117618",
+      "name": "AP245788",
       "detail": "MobileSiteMapNode",
       "screenId": null,
       "status": "same",
@@ -3851,13 +4095,31 @@
         "xml"
       ],
       "a": {
-        "startLine": 19879,
-        "endLine": 19881
+        "startLine": 20060,
+        "endLine": 20062
       },
       "b": {
-        "startLine": 19424,
-        "endLine": 19426
+        "startLine": 19587,
+        "endLine": 19589
       }
+    },
+    {
+      "id": "MobileSiteMapNode:AP425060",
+      "element": "MobileSiteMapNode",
+      "key": "AP425060",
+      "group": "other",
+      "name": "AP425060",
+      "detail": "MobileSiteMapNode",
+      "screenId": null,
+      "status": "only-a",
+      "views": [
+        "xml"
+      ],
+      "a": {
+        "startLine": 20063,
+        "endLine": 20065
+      },
+      "b": null
     },
     {
       "id": "Locale:fr-FR",
@@ -3873,8 +4135,8 @@
       ],
       "a": null,
       "b": {
-        "startLine": 19236,
-        "endLine": 19238
+        "startLine": 19460,
+        "endLine": 19462
       }
     }
   ],

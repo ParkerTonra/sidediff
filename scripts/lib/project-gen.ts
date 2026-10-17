@@ -12,7 +12,7 @@ import { deflateRawSync } from 'node:zlib';
 import { createRng } from './rng.ts';
 import type { Rng } from './rng.ts';
 import { csharpUnit, mutateLine } from './fixture-gen.ts';
-import type { ItemStatus, ProjectGroup } from '../../src/types.ts';
+import type { ItemStatus, ItemViewKind, ProjectGroup } from '../../src/types.ts';
 
 export const PROJECT_SEED = 0x5d1f_0100;
 export const EOL = '\r\n';
@@ -41,6 +41,8 @@ interface Item {
   name: string;
   detail: string;
   screenId?: string;
+  /** Fields the contract leaves open for this element kind (oracles skip them). */
+  loose?: ('name' | 'detail' | 'screenId' | 'views' | 'ranges')[];
   a: El | null;
   b: El | null;
 }
@@ -55,10 +57,12 @@ export interface ExpectedItem {
   detail: string;
   screenId: string | null;
   status: ItemStatus;
-  views: ('code' | 'changes' | 'xml')[];
+  views: ItemViewKind['id'][];
   /** 1-based inclusive element line ranges, null when absent on that side. */
   a: { startLine: number; endLine: number } | null;
   b: { startLine: number; endLine: number } | null;
+  /** Present when the contract leaves some fields open for this kind; compare the rest. */
+  loose?: ('name' | 'detail' | 'screenId' | 'views' | 'ranges')[];
 }
 
 export interface ProjectPair {
@@ -76,7 +80,7 @@ export interface ProjectPair {
   edits: Record<string, string[]>;
 }
 
-export const GROUP_ORDER: readonly ProjectGroup[] = ['code', 'screens', 'tables', 'sql', 'reports', 'inquiries', 'sitemap', 'integration', 'files', 'other'];
+export const GROUP_ORDER: readonly ProjectGroup[] = ['code', 'screens', 'tables', 'sql', 'reports', 'inquiries', 'sitemap', 'integration', 'security', 'files', 'assemblies', 'images', 'other'];
 
 // ---------------------------------------------------------------- rendering
 
@@ -311,7 +315,7 @@ function buildItems(rng: Rng): Item[] {
     add({ key: path, group: 'files', name: path.split('\\').pop() ?? path, detail: path, a: { tag: 'File', attrs: [['AppRelativePath', path]], parts: [{ kind: 'cdata', name: 'Content', body }] } });
   }
   // Content-less file references, as in real exports (the files live in the zip).
-  for (const path of [`Pages\\SO\\${RELATED_SCREEN}.aspx`, `Pages\\SO\\${RELATED_SCREEN}.aspx.cs`, 'Pages\\PO\\PO302000.aspx', 'Bin\\Contoso.Extensions.dll']) {
+  for (const path of [`Pages\\SO\\${RELATED_SCREEN}.aspx`, `Pages\\SO\\${RELATED_SCREEN}.aspx.cs`, 'Pages\\PO\\PO302000.aspx', 'Bin\\Contoso.Extensions.dll', 'Images\\contoso-logo.png']) {
     const screenId = /Pages\\\w\w\\(\w\w\d{6})\.aspx/.exec(path)?.[1];
     add({ key: path, group: path.endsWith('.cs') ? 'code' : 'files', name: path.split('\\').pop() ?? path, detail: path, ...(screenId ? { screenId } : {}), a: { tag: 'File', attrs: [['AppRelativePath', path]], parts: [] } });
   }
@@ -384,7 +388,7 @@ function buildItems(rng: Rng): Item[] {
       '    </row>',
       '</GIDesign>',
     ];
-    add({ key: name, group: 'inquiries', name, detail: '', a: { tag: 'GenericInquiryScreen', attrs: [], parts: [{ kind: 'lines', lines: dataSet('GIDesign', rows) }] } });
+    add({ key: name, group: 'inquiries', name, detail: 'Generic inquiry', a: { tag: 'GenericInquiryScreen', attrs: [], parts: [{ kind: 'lines', lines: dataSet('GIDesign', rows) }] } });
   }
   // Endpoints: the same name in two versions, plus another one.
   for (const [nm, ver] of [['ContosoEndpoint', '23.200.001'], ['ContosoEndpoint', '24.200.001'], ['ContosoMobile', '24.200.001']] as const) {
@@ -395,6 +399,43 @@ function buildItems(rng: Rng): Item[] {
       '    </Endpoint>',
     ];
     add({ key: nm, idBase: `EntityEndpoint:${nm}@${ver}`, group: 'integration', name: nm, detail: `Version ${ver}`, a: { tag: 'EntityEndpoint', attrs: [['Name', nm], ['Version', ver]], parts: [{ kind: 'lines', lines }] } });
+  }
+  // Phase 5 kinds seen in real packages. Name/detail/screenId the contract leaves open follow the
+  // classifier's choices (src/project/classify.ts); still-open ones are marked loose.
+  // Access rights per screen: identity = ScreenID of the first row.
+  for (const [screen, title] of [[RELATED_SCREEN, 'Orders & Returns'], ['PO302000', 'Purchase Receipts'], ['AR303000', 'Customer Credit']] as const) {
+    const rows = [
+      '<SiteMap>',
+      `    <row Position="${rng.int(1, 900)}" Title="${escAttr(title)}" Url="~/Pages/${screen.slice(0, 2)}/${screen}.aspx" ScreenID="${screen}" NodeID="${guid(rng)}" ParentID="${guid(rng)}">`,
+      ...['Administrator', 'Contoso Sales', 'Contoso Warehouse'].map((role, k) => `        <RolesInGraph Rolename="${role}" ApplicationName="/" Accessrights="${4 - k}" />`),
+      '    </row>',
+      '</SiteMap>',
+    ];
+    const lines = dataSet('SiteMap', rows).map((l, k) => (k === 1 ? l.replace('">', '" stable-sharing="True" file-name="(ScreenID)">') : l));
+    add({ key: screen, group: 'security', name: screen, detail: `Access rights · ${title}`, screenId: screen, a: { tag: 'ScreenWithRights', attrs: [['accessRightsMergeRule', 'ApplyPermissionsFromCustomizationProject']], parts: [{ kind: 'lines', lines }] } });
+  }
+  // Workflow (automation) definitions: identity = ScreenID.
+  for (const screen of [RELATED_SCREEN, 'PO302000']) {
+    const steps = ['Hold', 'Open', 'Completed'].flatMap((st) => [`    <Step StepID="${st}" Description="${st} state">`, `        <Action ActionName="${rng.pick(['releaseFromHold', 'putOnHold', 'complete', 'reopen'])}" IsActive="True" />`, '    </Step>']);
+    add({ key: screen, group: 'screens', name: `${screen} automation`, detail: '', screenId: screen, loose: ['detail'], a: { tag: 'Automation', attrs: [['ScreenID', screen]], parts: [{ kind: 'lines', lines: steps }] } });
+  }
+  // Mobile site map.
+  add({ key: RELATED_SCREEN, group: 'sitemap', name: RELATED_SCREEN, detail: 'Mobile site map', screenId: RELATED_SCREEN, a: { tag: 'MobileSiteMap', attrs: [['ScreenID', RELATED_SCREEN]], parts: [{ kind: 'lines', lines: [`    <Screen Id="${RELATED_SCREEN}" Type="SimpleScreen" DisplayName="Sales Orders" Icon="system://Cart" />`, '    <Workspace Name="Sales" />'] }] } });
+  // Import/export scenarios (integration, identity = Name).
+  for (const nm of ['Contoso Import Routes', 'Contoso Export Carriers']) {
+    const rows = ['<SYMapping>', `    <row Name="${nm}" ScreenID="SM206025" GraphName="PX.Api.SYImportProcess" IsActive="True">`, ...Array.from({ length: rng.int(3, 8) }, (_, k) => `        <SYMappingField LineNbr="${k + 1}" ObjectName="Document" FieldName="Usr${rng.pick(WORDS)}${k}" Value="=[Route${k}]" />`), '    </row>', '</SYMapping>'];
+    add({ key: nm, group: 'integration', name: nm, detail: 'Scenario · SM206025', screenId: 'SM206025', a: { tag: 'XportScenario', attrs: [['Name', nm]], parts: [{ kind: 'lines', lines: dataSet('SYMapping', rows) }] } });
+  }
+  // User-defined attributes (tables, identity = AttributeID of the first row).
+  for (const [id, desc, values] of [['CTCOLOR', 'Route Color', ['RED', 'GREEN', 'BLUE']], ['CTZONE', 'Delivery Zone', ['NORTH', 'SOUTH']]] as const) {
+    const rows = ['<CSAttribute>', `    <row AttributeID="${id}" Description="${desc}" ControlType="2" IsInternal="False" ContainsPersonalData="False">`, ...values.map((v, k) => `        <CSAttributeDetail ValueID="${v}" Description="${v.charAt(0)}${v.slice(1).toLowerCase()}" SortOrder="${k + 1}" Disabled="False" />`), '    </row>', '</CSAttribute>'];
+    add({ key: id, group: 'tables', name: id, detail: `Attribute · ${desc}`, a: { tag: 'CSAttribute', attrs: [], parts: [{ kind: 'lines', lines: dataSet('CSAttribute', rows) }] } });
+  }
+  // Modern dashboards (inquiries, identity = Name of the first row).
+  {
+    const nm = 'Contoso Sales Overview';
+    const rows = ['<Dashboard>', `    <row DashboardID="${guid(rng)}" Name="${nm}" Owner="admin" AllowCopy="True">`, ...Array.from({ length: 4 }, (_, k) => `        <DashboardWidget WidgetID="${guid(rng)}" Type="${rng.pick(['Chart', 'Table', 'Scorecard'])}" Caption="Widget ${k + 1}" Row="${k}" Column="0" />`), '    </row>', '</Dashboard>'];
+    add({ key: nm, group: 'inquiries', name: nm, detail: 'Dashboard', a: { tag: 'DashboardV2', attrs: [], parts: [{ kind: 'lines', lines: dataSet('Dashboard', rows) }] } });
   }
   // Unknown elements: land in "other" with detail = element name.
   for (let i = 0; i < 2; i++) {
@@ -509,6 +550,24 @@ function buildPair(): ProjectPair {
     if (c) c.body[2] = (c.body[2] ?? '').replace('value="true"', 'value="false"');
   });
 
+  // Phase 5 kinds: rights changed, a UDF value added, a scenario only in A.
+  mod(pick(by('ScreenWithRights'), 0), (el) => {
+    const p = el.parts[0];
+    if (p?.kind === 'lines') p.lines = p.lines.map((l) => (l.includes('Rolename="Contoso Sales"') ? l.replace(/Accessrights="\d"/, 'Accessrights="1"') : l));
+  });
+  mod(pick(by('CSAttribute'), 1), (el) => {
+    const p = el.parts[0];
+    if (p?.kind === 'lines') {
+      const at = p.lines.findIndex((l) => l.includes('</row>'));
+      p.lines.splice(at, 0, '                        <CSAttributeDetail ValueID="EAST" Description="East" SortOrder="3" Disabled="False" />');
+    }
+  });
+  {
+    const it = pick(by('XportScenario'), 1);
+    it.b = null;
+    edits.onlyA?.push(it.key);
+  }
+
   // Whitespace-only.
   for (const i of [3, 4]) {
     editCode(B(pick(graphs, i)), rng, 'whitespace', 3);
@@ -611,6 +670,7 @@ function buildPair(): ProjectPair {
       views: views(el),
       a: r.a ?? null,
       b: r.b ?? null,
+      ...(it.loose ? { loose: it.loose } : {}),
     };
   });
   expected.sort((x, y) => GROUP_ORDER.indexOf(x.group) - GROUP_ORDER.indexOf(y.group) || x.name.localeCompare(y.name) || x.id.localeCompare(y.id));
