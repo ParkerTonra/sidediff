@@ -65,7 +65,9 @@ describe('project fixture', () => {
     expect([...fileTypes].sort()).toEqual(['ExistingDac', 'ExistingGraph', 'NewDac', 'NewFile', 'NewGraph']);
     expect(sidecar.items.some((i) => i.element === 'File' && i.group === 'files')).toBe(true);
     expect(sidecar.items.some((i) => i.element === 'File' && i.group === 'code')).toBe(true);
-    expect(sidecar.items.filter((i) => i.element === 'Page').every((i) => i.views[0] === 'code')).toBe(true);
+    // Phase 5: every item has a summary view; first for pages (and the other outline kinds), then the decoded page.
+    expect(sidecar.items.every((i) => i.views.includes('summary'))).toBe(true);
+    expect(sidecar.items.filter((i) => i.element === 'Page').every((i) => i.views[0] === 'summary' && i.views[1] === 'code')).toBe(true);
     expect(sidecar.items.some((i) => i.element === 'Page' && i.views.includes('changes'))).toBe(true);
     // Real exports also carry content-less File references.
     expect(p.a).toMatch(/^<File AppRelativePath="[^"]+" \/>\r$/m);

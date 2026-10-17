@@ -97,18 +97,21 @@ describe('package fixture', () => {
     }
     expect(item('File:Pages\\SO\\SO301000.aspx').status).toBe('modified');
     expect(item('PerTenantFile:screens\\SO\\SO301000\\SO301000.ts').status).toBe('modified');
-    expect(item('File:Bin\\Contoso.Extensions.dll')).toMatchObject({ status: 'modified', views: ['assembly', 'xml'] });
-    expect(item('File:Images\\contoso-logo.png')).toMatchObject({ status: 'same', views: ['image', 'xml'] });
+    // Referenced DLLs and images are grouped by kind (Lead decision).
+    expect(item('File:Bin\\Contoso.Extensions.dll')).toMatchObject({ status: 'modified', group: 'assemblies', views: ['assembly', 'xml', 'summary'] });
+    expect(item('File:Images\\contoso-logo.png')).toMatchObject({ status: 'same', group: 'images', views: ['image', 'xml', 'summary'] });
+    // .aspx/.html content: screen outline summary first.
+    expect(item('File:Pages\\SO\\SO301000.aspx').views).toEqual(['summary', 'code', 'xml']);
     expect(item('Zip:Images/contoso-banner.jpg')).toMatchObject({ status: 'only-a', group: 'images', sides: ['a'] });
-    expect(item('File:Pages\\PO\\PO302000.aspx')).toMatchObject({ status: 'same', views: ['xml'] });
+    expect(item('File:Pages\\PO\\PO302000.aspx')).toMatchObject({ status: 'same', views: ['xml', 'summary'] });
   });
 
   it('unreferenced files become Zip items, grouped by kind, marked "not in project.xml"', () => {
     const zipItems = sidecar.items.filter((i) => i.element === 'Zip');
     expect(zipItems.map((i) => i.key).sort()).toEqual([...(sidecar.edits.unreferenced ?? [])].sort());
     expect(zipItems.every((i) => i.detail === 'not in project.xml')).toBe(true);
-    expect(item('Zip:App_Data/SnapshotConfigs/ContosoRoutes.esc')).toMatchObject({ group: 'files', views: ['code'] });
-    expect(item('Zip:Data/routes.bin')).toMatchObject({ group: 'files', views: ['binary'] });
+    expect(item('Zip:App_Data/SnapshotConfigs/ContosoRoutes.esc')).toMatchObject({ group: 'files', views: ['code', 'summary'] });
+    expect(item('Zip:Data/routes.bin')).toMatchObject({ group: 'files', views: ['binary', 'summary'] });
   });
 
   it('counts add up; overview counts follow the items on each side', () => {

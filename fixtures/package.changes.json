@@ -6,11 +6,11 @@
   "a": {
     "file": "package-a.zip",
     "bytes": 135882,
-    "sha256": "36730459853e1855679a2071478a334c21b090ff3eaa7e7501a7e788295b53fc",
+    "sha256": "a345564f0060d3f3e6a4093f611350d466bc1b04cce21c69183b85b9e80f5f7e",
     "entries": [
       {
         "path": "project.xml",
-        "size": 1045848
+        "size": 1045521
       },
       {
         "path": "Pages/SO/SO301000.aspx",
@@ -61,11 +61,11 @@
   "b": {
     "file": "package-b.zip",
     "bytes": 132991,
-    "sha256": "b156a9a51222abb3358fbc8f6a53cfb5448337a3822cac927d147526f2368cef",
+    "sha256": "1f5b1c6f60924caac0307763df44a22b81adde5fd81e4f5e6acfcc0fc28369cc",
     "entries": [
       {
         "path": "project.xml",
-        "size": 1020120
+        "size": 1019798
       },
       {
         "path": "Pages/SO/SO301000.aspx",
@@ -124,8 +124,9 @@
       "sitemap": 9,
       "integration": 5,
       "security": 3,
-      "files": 13,
-      "images": 1,
+      "files": 11,
+      "assemblies": 1,
+      "images": 2,
       "other": 3
     }
   },
@@ -149,8 +150,9 @@
         "sitemap": 8,
         "integration": 4,
         "security": 3,
-        "files": 13,
-        "images": 1,
+        "files": 11,
+        "assemblies": 1,
+        "images": 2,
         "other": 2
       },
       "screensInclude": [
@@ -213,7 +215,9 @@
         "sitemap": 8,
         "integration": 4,
         "security": 3,
-        "files": 12,
+        "files": 10,
+        "assemblies": 1,
+        "images": 1,
         "other": 2
       },
       "screensInclude": [
@@ -329,6 +333,7 @@
       "screenId": null,
       "status": "modified",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -356,7 +361,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 17226,
@@ -382,7 +388,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 5785,
@@ -408,7 +415,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 2617,
@@ -434,7 +442,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 2325,
@@ -459,6 +468,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -485,6 +495,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -512,7 +523,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 15560,
@@ -538,7 +550,8 @@
       "status": "only-a",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 13807,
@@ -560,7 +573,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 16505,
@@ -586,7 +600,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 17830,
@@ -612,7 +627,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 18090,
@@ -638,7 +654,8 @@
       "status": "modified",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 14953,
@@ -664,7 +681,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 17360,
@@ -690,7 +708,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 9432,
@@ -716,7 +735,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 6580,
@@ -742,7 +762,8 @@
       "status": "whitespace",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 1095,
@@ -768,7 +789,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 6462,
@@ -794,7 +816,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 12806,
@@ -820,7 +843,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 14230,
@@ -846,7 +870,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 15231,
@@ -871,6 +896,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -898,7 +924,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 16623,
@@ -924,7 +951,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 16869,
@@ -949,6 +977,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -975,6 +1004,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -1002,7 +1032,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 14718,
@@ -1028,7 +1059,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 17027,
@@ -1053,6 +1085,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -1080,7 +1113,8 @@
       "status": "modified",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 3476,
@@ -1106,7 +1140,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 9090,
@@ -1132,7 +1167,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 8192,
@@ -1158,7 +1194,8 @@
       "status": "modified",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 2174,
@@ -1184,7 +1221,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 9586,
@@ -1210,7 +1248,8 @@
       "status": "whitespace",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 14522,
@@ -1236,7 +1275,8 @@
       "status": "modified",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 313,
@@ -1262,7 +1302,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 10774,
@@ -1288,7 +1329,8 @@
       "status": "modified",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 7019,
@@ -1314,7 +1356,8 @@
       "status": "modified",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 5239,
@@ -1340,7 +1383,8 @@
       "status": "whitespace",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 988,
@@ -1366,7 +1410,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 10478,
@@ -1392,7 +1437,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 14077,
@@ -1418,7 +1464,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 18378,
@@ -1444,7 +1491,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 16163,
@@ -1470,7 +1518,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 11149,
@@ -1496,7 +1545,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 5979,
@@ -1522,7 +1572,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 5389,
@@ -1548,7 +1599,8 @@
       "status": "modified",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 13291,
@@ -1573,6 +1625,7 @@
       "screenId": null,
       "status": "only-a",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -1595,6 +1648,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -1622,7 +1676,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 17558,
@@ -1648,7 +1703,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 18264,
@@ -1673,6 +1729,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -1699,6 +1756,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -1726,7 +1784,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 15878,
@@ -1752,7 +1811,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 18690,
@@ -1778,7 +1838,8 @@
       "status": "modified",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 2,
@@ -1804,7 +1865,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 5006,
@@ -1830,7 +1892,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 12918,
@@ -1856,7 +1919,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 6065,
@@ -1882,7 +1946,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 4324,
@@ -1908,7 +1973,8 @@
       "status": "modified",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 591,
@@ -1934,7 +2000,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 10238,
@@ -1960,7 +2027,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 8932,
@@ -1986,7 +2054,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 8590,
@@ -2012,7 +2081,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 3018,
@@ -2038,7 +2108,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 2467,
@@ -2064,7 +2135,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 19033,
@@ -2089,6 +2161,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -2116,7 +2189,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 15310,
@@ -2141,6 +2215,7 @@
       "screenId": null,
       "status": "modified",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -2168,7 +2243,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 16235,
@@ -2194,7 +2270,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 7137,
@@ -2220,7 +2297,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 3823,
@@ -2246,7 +2324,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 11661,
@@ -2272,7 +2351,8 @@
       "status": "modified",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 2064,
@@ -2298,7 +2378,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 4118,
@@ -2324,7 +2405,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 11840,
@@ -2350,7 +2432,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 12600,
@@ -2375,6 +2458,7 @@
       "screenId": null,
       "status": "only-b",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -2397,6 +2481,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -2424,7 +2509,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 11487,
@@ -2450,7 +2536,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 7660,
@@ -2476,7 +2563,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 1958,
@@ -2502,7 +2590,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 7994,
@@ -2528,7 +2617,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 6733,
@@ -2553,6 +2643,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -2580,7 +2671,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 13553,
@@ -2605,6 +2697,7 @@
       "screenId": "AP346560",
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -2631,6 +2724,7 @@
       "screenId": "AP407880",
       "status": "same",
       "views": [
+        "summary",
         "code",
         "changes",
         "xml"
@@ -2658,6 +2752,7 @@
       "screenId": "AR164860",
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -2684,6 +2779,7 @@
       "screenId": "AR234586",
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -2710,6 +2806,7 @@
       "screenId": "AR247769",
       "status": "same",
       "views": [
+        "summary",
         "code",
         "changes",
         "xml"
@@ -2737,6 +2834,7 @@
       "screenId": "AR289382",
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -2764,7 +2862,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 19077,
@@ -2789,6 +2888,7 @@
       "screenId": "AR334764",
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -2815,6 +2915,7 @@
       "screenId": "AR343143",
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -2841,6 +2942,7 @@
       "screenId": "AR420953",
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -2867,6 +2969,7 @@
       "screenId": "CR243830",
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -2893,6 +2996,7 @@
       "screenId": "CR363782",
       "status": "same",
       "views": [
+        "summary",
         "code",
         "changes",
         "xml"
@@ -2920,6 +3024,7 @@
       "screenId": "CR458784",
       "status": "only-a",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -2942,6 +3047,7 @@
       "screenId": "IN173130",
       "status": "same",
       "views": [
+        "summary",
         "code",
         "changes",
         "xml"
@@ -2969,6 +3075,7 @@
       "screenId": "IN178523",
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -2995,6 +3102,7 @@
       "screenId": "IN211982",
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -3021,6 +3129,7 @@
       "screenId": "IN302001",
       "status": "modified",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -3047,6 +3156,7 @@
       "screenId": "PM115337",
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -3073,6 +3183,7 @@
       "screenId": "PM299221",
       "status": "modified",
       "views": [
+        "summary",
         "code",
         "changes",
         "xml"
@@ -3100,6 +3211,7 @@
       "screenId": "PO302000",
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -3126,15 +3238,16 @@
       "screenId": "PO302000",
       "status": "same",
       "views": [
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
-        "startLine": 19948,
-        "endLine": 19958
+        "startLine": 19928,
+        "endLine": 19938
       },
       "b": {
-        "startLine": 19493,
-        "endLine": 19503
+        "startLine": 19473,
+        "endLine": 19483
       },
       "loose": [
         "detail"
@@ -3155,7 +3268,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 19076,
@@ -3180,6 +3294,7 @@
       "screenId": "PO308625",
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -3206,6 +3321,7 @@
       "screenId": "PO424759",
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -3232,6 +3348,7 @@
       "screenId": "SO301000",
       "status": "same",
       "views": [
+        "summary",
         "code",
         "changes",
         "xml"
@@ -3259,15 +3376,16 @@
       "screenId": "SO301000",
       "status": "same",
       "views": [
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
-        "startLine": 19937,
-        "endLine": 19947
+        "startLine": 19917,
+        "endLine": 19927
       },
       "b": {
-        "startLine": 19482,
-        "endLine": 19492
+        "startLine": 19462,
+        "endLine": 19472
       },
       "loose": [
         "detail"
@@ -3288,7 +3406,8 @@
       "status": "modified",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 19075,
@@ -3313,6 +3432,7 @@
       "screenId": "SO404818",
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -3339,6 +3459,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -3364,6 +3485,7 @@
       "screenId": null,
       "status": "only-a",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -3385,6 +3507,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -3410,15 +3533,16 @@
       "screenId": null,
       "status": "same",
       "views": [
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
-        "startLine": 20003,
-        "endLine": 20021
+        "startLine": 19983,
+        "endLine": 20001
       },
       "b": {
-        "startLine": 19529,
-        "endLine": 19547
+        "startLine": 19509,
+        "endLine": 19527
       },
       "sides": [
         "a",
@@ -3435,15 +3559,16 @@
       "screenId": null,
       "status": "modified",
       "views": [
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
-        "startLine": 20022,
-        "endLine": 20039
+        "startLine": 20002,
+        "endLine": 20019
       },
       "b": {
-        "startLine": 19548,
-        "endLine": 19566
+        "startLine": 19528,
+        "endLine": 19546
       },
       "sides": [
         "a",
@@ -3460,6 +3585,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -3485,6 +3611,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -3510,6 +3637,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -3535,6 +3663,7 @@
       "screenId": null,
       "status": "whitespace",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -3560,6 +3689,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -3585,6 +3715,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -3610,6 +3741,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -3635,6 +3767,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -3660,6 +3793,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -3667,8 +3801,8 @@
         "endLine": 19173
       },
       "b": {
-        "startLine": 19590,
-        "endLine": 19598
+        "startLine": 19570,
+        "endLine": 19578
       },
       "sides": [
         "a",
@@ -3685,6 +3819,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -3710,6 +3845,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -3735,6 +3871,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -3760,6 +3897,7 @@
       "screenId": null,
       "status": "modified",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -3785,6 +3923,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -3810,6 +3949,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -3835,6 +3975,7 @@
       "screenId": null,
       "status": "modified",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -3860,6 +4001,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -3885,6 +4027,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -3911,6 +4054,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -3937,6 +4081,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -3963,6 +4108,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -3989,6 +4135,7 @@
       "screenId": null,
       "status": "modified",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -4015,6 +4162,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -4041,13 +4189,14 @@
       "screenId": null,
       "status": "only-b",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
       "a": null,
       "b": {
-        "startLine": 19427,
-        "endLine": 19444
+        "startLine": 19407,
+        "endLine": 19424
       },
       "sides": [
         "b"
@@ -4063,6 +4212,7 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -4090,7 +4240,8 @@
       "status": "modified",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 19455,
@@ -4116,7 +4267,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 19508,
@@ -4142,7 +4294,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 19535,
@@ -4168,7 +4321,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 19572,
@@ -4193,15 +4347,16 @@
       "screenId": null,
       "status": "same",
       "views": [
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
-        "startLine": 20040,
-        "endLine": 20059
+        "startLine": 20020,
+        "endLine": 20039
       },
       "b": {
-        "startLine": 19567,
-        "endLine": 19586
+        "startLine": 19547,
+        "endLine": 19566
       },
       "sides": [
         "a",
@@ -4218,15 +4373,16 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
-        "startLine": 19825,
-        "endLine": 19853
+        "startLine": 19809,
+        "endLine": 19833
       },
       "b": {
-        "startLine": 19325,
-        "endLine": 19353
+        "startLine": 19309,
+        "endLine": 19333
       },
       "sides": [
         "a",
@@ -4243,15 +4399,16 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
-        "startLine": 19732,
-        "endLine": 19761
+        "startLine": 19728,
+        "endLine": 19753
       },
       "b": {
-        "startLine": 19232,
-        "endLine": 19261
+        "startLine": 19228,
+        "endLine": 19253
       },
       "sides": [
         "a",
@@ -4268,15 +4425,16 @@
       "screenId": null,
       "status": "modified",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
         "startLine": 19705,
-        "endLine": 19731
+        "endLine": 19727
       },
       "b": {
         "startLine": 19204,
-        "endLine": 19231
+        "endLine": 19227
       },
       "sides": [
         "a",
@@ -4293,15 +4451,16 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
-        "startLine": 19762,
-        "endLine": 19793
+        "startLine": 19754,
+        "endLine": 19781
       },
       "b": {
-        "startLine": 19262,
-        "endLine": 19293
+        "startLine": 19254,
+        "endLine": 19281
       },
       "sides": [
         "a",
@@ -4318,15 +4477,16 @@
       "screenId": null,
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
-        "startLine": 19794,
-        "endLine": 19824
+        "startLine": 19782,
+        "endLine": 19808
       },
       "b": {
-        "startLine": 19294,
-        "endLine": 19324
+        "startLine": 19282,
+        "endLine": 19308
       },
       "sides": [
         "a",
@@ -4343,6 +4503,7 @@
       "screenId": "AR184753",
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -4368,6 +4529,7 @@
       "screenId": "AR242798",
       "status": "modified",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -4393,6 +4555,7 @@
       "screenId": "IN328704",
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -4418,6 +4581,7 @@
       "screenId": "PM151784",
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -4443,6 +4607,7 @@
       "screenId": "PO156080",
       "status": "only-a",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -4464,6 +4629,7 @@
       "screenId": "PO171668",
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -4489,15 +4655,16 @@
       "screenId": "SO301000",
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
-        "startLine": 19959,
-        "endLine": 19962
+        "startLine": 19939,
+        "endLine": 19942
       },
       "b": {
-        "startLine": 19504,
-        "endLine": 19507
+        "startLine": 19484,
+        "endLine": 19487
       },
       "sides": [
         "a",
@@ -4514,6 +4681,7 @@
       "screenId": "SO301000",
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
@@ -4539,12 +4707,13 @@
       "screenId": "SO509999",
       "status": "only-b",
       "views": [
+        "summary",
         "xml"
       ],
       "a": null,
       "b": {
-        "startLine": 19445,
-        "endLine": 19459
+        "startLine": 19425,
+        "endLine": 19439
       },
       "sides": [
         "b"
@@ -4560,11 +4729,12 @@
       "screenId": "SM206025",
       "status": "only-a",
       "views": [
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
-        "startLine": 19984,
-        "endLine": 20002
+        "startLine": 19964,
+        "endLine": 19982
       },
       "b": null,
       "sides": [
@@ -4581,15 +4751,16 @@
       "screenId": "SM206025",
       "status": "same",
       "views": [
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
-        "startLine": 19963,
-        "endLine": 19983
+        "startLine": 19943,
+        "endLine": 19963
       },
       "b": {
-        "startLine": 19508,
-        "endLine": 19528
+        "startLine": 19488,
+        "endLine": 19508
       },
       "sides": [
         "a",
@@ -4606,15 +4777,16 @@
       "screenId": null,
       "status": "modified",
       "views": [
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
-        "startLine": 19854,
-        "endLine": 19867
+        "startLine": 19834,
+        "endLine": 19847
       },
       "b": {
-        "startLine": 19354,
-        "endLine": 19366
+        "startLine": 19334,
+        "endLine": 19346
       },
       "sides": [
         "a",
@@ -4631,12 +4803,13 @@
       "screenId": null,
       "status": "only-b",
       "views": [
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": null,
       "b": {
-        "startLine": 19367,
-        "endLine": 19376
+        "startLine": 19347,
+        "endLine": 19356
       },
       "sides": [
         "b"
@@ -4652,15 +4825,16 @@
       "screenId": null,
       "status": "same",
       "views": [
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
-        "startLine": 19868,
-        "endLine": 19879
+        "startLine": 19848,
+        "endLine": 19859
       },
       "b": {
-        "startLine": 19377,
-        "endLine": 19388
+        "startLine": 19357,
+        "endLine": 19368
       },
       "sides": [
         "a",
@@ -4677,15 +4851,16 @@
       "screenId": "AR303000",
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
-        "startLine": 19918,
-        "endLine": 19936
+        "startLine": 19898,
+        "endLine": 19916
       },
       "b": {
-        "startLine": 19463,
-        "endLine": 19481
+        "startLine": 19443,
+        "endLine": 19461
       },
       "sides": [
         "a",
@@ -4702,15 +4877,16 @@
       "screenId": "PO302000",
       "status": "same",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
-        "startLine": 19899,
-        "endLine": 19917
+        "startLine": 19879,
+        "endLine": 19897
       },
       "b": {
-        "startLine": 19408,
-        "endLine": 19426
+        "startLine": 19388,
+        "endLine": 19406
       },
       "sides": [
         "a",
@@ -4727,15 +4903,16 @@
       "screenId": "SO301000",
       "status": "modified",
       "views": [
+        "summary",
         "xml"
       ],
       "a": {
-        "startLine": 19880,
-        "endLine": 19898
+        "startLine": 19860,
+        "endLine": 19878
       },
       "b": {
-        "startLine": 19389,
-        "endLine": 19407
+        "startLine": 19369,
+        "endLine": 19387
       },
       "sides": [
         "a",
@@ -4753,7 +4930,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 19020,
@@ -4762,58 +4940,6 @@
       "b": {
         "startLine": 18530,
         "endLine": 18536
-      },
-      "sides": [
-        "a",
-        "b"
-      ]
-    },
-    {
-      "id": "File:Images\\contoso-logo.png",
-      "element": "File",
-      "key": "Images\\contoso-logo.png",
-      "group": "files",
-      "name": "contoso-logo.png",
-      "detail": "Images\\contoso-logo.png",
-      "screenId": null,
-      "status": "same",
-      "views": [
-        "image",
-        "xml"
-      ],
-      "a": {
-        "startLine": 19036,
-        "endLine": 19036
-      },
-      "b": {
-        "startLine": 18546,
-        "endLine": 18546
-      },
-      "sides": [
-        "a",
-        "b"
-      ]
-    },
-    {
-      "id": "File:Bin\\Contoso.Extensions.dll",
-      "element": "File",
-      "key": "Bin\\Contoso.Extensions.dll",
-      "group": "files",
-      "name": "Contoso.Extensions.dll",
-      "detail": "Bin\\Contoso.Extensions.dll",
-      "screenId": null,
-      "status": "modified",
-      "views": [
-        "assembly",
-        "xml"
-      ],
-      "a": {
-        "startLine": 19035,
-        "endLine": 19035
-      },
-      "b": {
-        "startLine": 18545,
-        "endLine": 18545
       },
       "sides": [
         "a",
@@ -4830,7 +4956,8 @@
       "screenId": null,
       "status": "same",
       "views": [
-        "code"
+        "code",
+        "summary"
       ],
       "a": null,
       "b": null,
@@ -4853,7 +4980,8 @@
       "screenId": "PO302000",
       "status": "same",
       "views": [
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 19034,
@@ -4879,7 +5007,8 @@
       "status": "only-a",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 19039,
@@ -4901,7 +5030,8 @@
       "status": "same",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 19027,
@@ -4926,7 +5056,8 @@
       "screenId": null,
       "status": "same",
       "views": [
-        "code"
+        "code",
+        "summary"
       ],
       "a": null,
       "b": null,
@@ -4949,7 +5080,8 @@
       "screenId": null,
       "status": "same",
       "views": [
-        "binary"
+        "binary",
+        "summary"
       ],
       "a": null,
       "b": null,
@@ -4972,6 +5104,7 @@
       "screenId": "SO301000",
       "status": "modified",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -4998,6 +5131,7 @@
       "screenId": "SO301000",
       "status": "same",
       "views": [
+        "summary",
         "code",
         "xml"
       ],
@@ -5025,7 +5159,8 @@
       "status": "modified",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 19037,
@@ -5051,7 +5186,8 @@
       "status": "modified",
       "views": [
         "code",
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
         "startLine": 19012,
@@ -5060,6 +5196,33 @@
       "b": {
         "startLine": 18522,
         "endLine": 18529
+      },
+      "sides": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "id": "File:Bin\\Contoso.Extensions.dll",
+      "element": "File",
+      "key": "Bin\\Contoso.Extensions.dll",
+      "group": "assemblies",
+      "name": "Contoso.Extensions.dll",
+      "detail": "Bin\\Contoso.Extensions.dll",
+      "screenId": null,
+      "status": "modified",
+      "views": [
+        "assembly",
+        "xml",
+        "summary"
+      ],
+      "a": {
+        "startLine": 19035,
+        "endLine": 19035
+      },
+      "b": {
+        "startLine": 18545,
+        "endLine": 18545
       },
       "sides": [
         "a",
@@ -5076,7 +5239,8 @@
       "screenId": null,
       "status": "only-a",
       "views": [
-        "image"
+        "image",
+        "summary"
       ],
       "a": null,
       "b": null,
@@ -5089,6 +5253,33 @@
       ]
     },
     {
+      "id": "File:Images\\contoso-logo.png",
+      "element": "File",
+      "key": "Images\\contoso-logo.png",
+      "group": "images",
+      "name": "contoso-logo.png",
+      "detail": "Images\\contoso-logo.png",
+      "screenId": null,
+      "status": "same",
+      "views": [
+        "image",
+        "xml",
+        "summary"
+      ],
+      "a": {
+        "startLine": 19036,
+        "endLine": 19036
+      },
+      "b": {
+        "startLine": 18546,
+        "endLine": 18546
+      },
+      "sides": [
+        "a",
+        "b"
+      ]
+    },
+    {
       "id": "MobileSiteMapNode:AP245788",
       "element": "MobileSiteMapNode",
       "key": "AP245788",
@@ -5098,15 +5289,16 @@
       "screenId": null,
       "status": "same",
       "views": [
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
-        "startLine": 20060,
-        "endLine": 20062
+        "startLine": 20040,
+        "endLine": 20042
       },
       "b": {
-        "startLine": 19587,
-        "endLine": 19589
+        "startLine": 19567,
+        "endLine": 19569
       },
       "sides": [
         "a",
@@ -5123,11 +5315,12 @@
       "screenId": null,
       "status": "only-a",
       "views": [
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": {
-        "startLine": 20063,
-        "endLine": 20065
+        "startLine": 20043,
+        "endLine": 20045
       },
       "b": null,
       "sides": [
@@ -5144,12 +5337,13 @@
       "screenId": null,
       "status": "only-b",
       "views": [
-        "xml"
+        "xml",
+        "summary"
       ],
       "a": null,
       "b": {
-        "startLine": 19460,
-        "endLine": 19462
+        "startLine": 19440,
+        "endLine": 19442
       },
       "sides": [
         "b"

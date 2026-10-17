@@ -153,7 +153,8 @@ const twoFrames = (page: Page): Promise<number> =>
 // ------------------------------------------------------------------ build, serve, bundle
 
 function ensureFixtures(names: string[]): void {
-  const missing = names.filter((n) => !existsSync(join(ROOT, `fixtures/${n}-a.xml`)) || !existsSync(join(ROOT, `fixtures/${n}-b.xml`)));
+  const ext = (n: string): string => (n === 'package' ? 'zip' : 'xml');
+  const missing = names.filter((n) => !existsSync(join(ROOT, `fixtures/${n}-a.${ext(n)}`)) || !existsSync(join(ROOT, `fixtures/${n}-b.${ext(n)}`)));
   if (missing.length === 0) return;
   console.log(`generating fixtures: ${missing.join(', ')}`);
   const r = spawnSync(process.execPath, [join(ROOT, 'scripts/gen-fixtures.ts'), '--only', missing.join(','), '--no-verify'], { stdio: 'inherit', cwd: ROOT });
@@ -452,6 +453,7 @@ async function largeScenario(browser: Browser, browserPid: number | undefined): 
   }
 
   await projectIndexLines(page, from);
+  await searchLine(page);
 
   // Diff only on / off.
   for (const on of [true, false]) {
@@ -460,8 +462,14 @@ async function largeScenario(browser: Browser, browserPid: number | undefined): 
     await sleep(300);
   }
 
-  // Scripted scroll.
+  // Scripted scroll. Phase 5: a <Customization> pair opens on the package overview; close it (Esc).
   try {
+    const ov = page.locator('[data-testid="overview-view"]');
+    if (await ov.isVisible().catch(() => false)) {
+      await page.mouse.click(800, 5);
+      await page.keyboard.press('Escape');
+      await ov.waitFor({ state: 'hidden', timeout: 5_000 });
+    }
     await twoFrames(page);
     const s = await scrollTest(page);
     add({ metric: 'Worst frame in 5 s scroll', value: ms(s.worst), target: '< 100 ms', status: s.moved ? gate(s.worst, 100) : 'ERROR', note: `${s.frames} frames, ${s.wheels} wheel events${s.moved ? '' : ', viewport did not move'}` });
@@ -563,6 +571,100 @@ async function projectIndexLines(page: Page, from: number): Promise<void> {
 }
 
 /** Project pair (CRLF, ~20k-character pageSource lines): diff ready < 1 s and exact (not quitEarly). */
+/** Phase 5: project.search() over the large pair, < 300 ms. */
+async function searchLine(page: Page): Promise<void> {
+  const metric = 'Search the large pair';
+  const has = await page.evaluate(() => typeof window.__sidediff?.project?.search === 'function');
+  if (!has) {
+    add({ metric, value: 'project.search missing', target: '< 300 ms', status: 'ERROR' });
+    return;
+  }
+  try {
+    // A rare literal from the fixture (one column name), a common token, and a regex.
+    const rare = /ColumnName="(\w+)"/.exec(readFileSync(join(ROOT, 'fixtures/large-a.xml'), 'utf8').slice(0, 200_000))?.[1] ?? 'UsrOrder';
+    const r = await page.evaluate(async (rareQuery) => {
+      const pr = window.__sidediff?.project;
+      if (!pr?.search) throw new Error('no search');
+      const runs: { ms: number; hits: number }[] = [];
+      for (const [q, o] of [[rareQuery, {}], ['PXUIField', {}], ['Usr\\w+Ext\\d', { regex: true }]] as const) {
+        const t0 = performance.now();
+        const hits = await pr.search(q, { limit: 500, ...o });
+        runs.push({ ms: performance.now() - t0, hits: hits.length });
+      }
+      return runs;
+    }, rare);
+    const worst = Math.max(...r.map((x) => x.ms));
+    add({ metric, value: ms(worst), target: '< 300 ms', status: gate(worst, 300), note: `worst of 3 queries (literal / common / regex): ${r.map((x) => `${ms(x.ms)} → ${x.hits} hits`).join(', ')}` });
+  } catch (e) {
+    add({ metric, value: errText(e), target: '< 300 ms', status: 'ERROR' });
+  }
+}
+
+/** Phase 5: drop package-a.zip on the start screen → explorer lists its items (< 1.5 s); decompiler cold/warm (report only). */
+async function packageScenario(browser: Browser): Promise<void> {
+  const { page } = await openApp(browser);
+  const sidecar = JSON.parse(readFileSync(join(ROOT, 'fixtures/package.changes.json'), 'utf8')) as { items: { sides: string[] }[] };
+  const expected = sidecar.items.filter((i) => i.sides.includes('a')).length;
+  const metric = 'Open package zip and index';
+  try {
+    const b64 = readFileSync(join(ROOT, 'fixtures/package-a.zip')).toString('base64');
+    const target = (await page.locator('[data-testid="start-drop-browse"]').count()) > 0 ? '[data-testid="start-drop-browse"]' : 'body';
+    const t0 = await page.evaluate(
+      ([data, sel]) => {
+        const bin = Uint8Array.from(atob(data as string), (c) => c.charCodeAt(0));
+        const dt = new DataTransfer();
+        dt.items.add(new File([bin], 'package-a.zip', { type: 'application/zip' }));
+        const el = document.querySelector(sel as string) ?? document.body;
+        const t = performance.now();
+        for (const type of ['dragenter', 'dragover', 'drop']) el.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt }));
+        return t;
+      },
+      [b64, target] as const,
+    );
+    const h = await page.waitForFunction((n) => (document.querySelectorAll('[data-testid="explorer-item"]').length >= n ? performance.now() : false), expected, { timeout: 15_000, polling: 10 }).catch(() => null);
+    if (!h) {
+      const shown = await page.locator('[data-testid="explorer-item"]').count();
+      add({ metric, value: `explorer shows ${shown} of ${expected} items after 15 s`, target: '< 1500 ms', status: 'ERROR' });
+    } else {
+      const t = ((await h.jsonValue()) as number) - t0;
+      add({ metric, value: ms(t), target: '< 1500 ms', status: gate(t, 1500), note: `drop → ${expected} explorer rows (133 KB zip, ${sidecar.items.length} items in the pair)` });
+    }
+  } catch (e) {
+    add({ metric, value: errText(e), target: '< 1500 ms', status: 'ERROR' });
+  }
+
+  // Decompiler: report only.
+  const dmetric = 'Decompiler cold load + one type';
+  try {
+    const row = page.locator('[data-testid="explorer-item"][data-id="File:Bin\\\\Contoso.Extensions.dll"]');
+    if ((await row.count()) === 0) throw new Error('DLL item not listed');
+    await row.click();
+    const type = page.locator('[data-testid="asm-type"][data-type$="ContosoRouteMaint"]').first();
+    await type.waitFor({ timeout: 15_000 });
+    await type.click();
+    const decompile = async (): Promise<number> => {
+      const t0 = await pageNow(page);
+      await page.locator('[data-testid="btn-decompile"]').click();
+      const h = await page.waitForFunction(
+        () => ([...document.querySelectorAll('.monaco-editor .view-lines')].some((e) => /class\s+ContosoRouteMaint/.test(e.textContent ?? '')) ? performance.now() : false),
+        undefined,
+        { timeout: 120_000, polling: 25 },
+      );
+      return ((await h.jsonValue()) as number) - t0;
+    };
+    const cold = await decompile();
+    await page.keyboard.press('Alt+ArrowLeft').catch(() => undefined);
+    await row.click();
+    await type.waitFor({ timeout: 15_000 });
+    await type.click();
+    const warm = await decompile();
+    add({ metric: dmetric, value: `cold ${ms(cold)}, warm ${ms(warm)}`, target: 'report only', status: 'INFO', note: 'click Decompile → C# with the class in the editor; ContosoRouteMaint' });
+  } catch (e) {
+    add({ metric: dmetric, value: errText(e), target: 'report only', status: 'INFO' });
+  }
+  await page.context().close();
+}
+
 async function projectScenario(browser: Browser): Promise<void> {
   const { page, path } = await openApp(browser);
   const metric = 'Project pair diff ready';
@@ -633,7 +735,7 @@ function printTable(): void {
 }
 
 async function main(): Promise<number> {
-  ensureFixtures(args.has('--skip-stress') ? ['large', 'project'] : ['large', 'project', 'stress']);
+  ensureFixtures(args.has('--skip-stress') ? ['large', 'project', 'package'] : ['large', 'project', 'package', 'stress']);
   if (!args.has('--no-build')) build();
   bundleReport();
   const server = await serve();
@@ -645,6 +747,8 @@ async function main(): Promise<number> {
     await largeScenario(browser, pid);
     console.log('\nproject pair:');
     await projectScenario(browser);
+    console.log('\npackage:');
+    await packageScenario(browser);
     if (!args.has('--skip-stress')) {
       console.log('\nstress pair:');
       await stressScenario(browser);

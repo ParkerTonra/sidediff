@@ -4,7 +4,7 @@
 // gets the same fixed DOS timestamp so output bytes never depend on the clock.
 // Also: CRC-32 and a minimal PNG encoder for fixture images.
 
-import { deflateRawSync, deflateSync } from 'node:zlib';
+import { deflateRawSync, deflateSync, inflateRawSync } from 'node:zlib';
 
 const CRC_TABLE = (() => {
   const t = new Uint32Array(256);
@@ -109,4 +109,30 @@ export function png(width: number, height: number, pixel: (x: number, y: number)
   ihdr[8] = 8; // bit depth
   ihdr[9] = 2; // truecolor
   return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw, { level: 9 })), chunk('IEND', Buffer.alloc(0))]);
+}
+
+/** Reads every entry of a zip (stored or deflate), checking sizes and CRC-32. For tests and the bench. */
+export function readZip(buf: Buffer): Map<string, Buffer> {
+  const eocd = buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  if (eocd < 0) throw new Error('not a zip: no end of central directory');
+  const count = buf.readUInt16LE(eocd + 10);
+  let p = buf.readUInt32LE(eocd + 16);
+  const out = new Map<string, Buffer>();
+  for (let i = 0; i < count; i++) {
+    if (buf.readUInt32LE(p) !== 0x02014b50) throw new Error(`bad central directory entry ${i}`);
+    const method = buf.readUInt16LE(p + 10);
+    const crc = buf.readUInt32LE(p + 16);
+    const csize = buf.readUInt32LE(p + 20);
+    const usize = buf.readUInt32LE(p + 24);
+    const nlen = buf.readUInt16LE(p + 28);
+    const name = buf.toString('utf8', p + 46, p + 46 + nlen);
+    const local = buf.readUInt32LE(p + 42);
+    const start = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);
+    const raw = buf.subarray(start, start + csize);
+    const data = method === 8 ? inflateRawSync(raw) : Buffer.from(raw);
+    if (data.length !== usize || crc32(data) !== crc) throw new Error(`corrupt entry ${name}`);
+    out.set(name, data);
+    p += 46 + nlen + buf.readUInt16LE(p + 30) + buf.readUInt16LE(p + 32);
+  }
+  return out;
 }

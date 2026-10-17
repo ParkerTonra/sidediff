@@ -147,10 +147,28 @@ function defaultView(el: El): string[] {
   return c.flatMap((x) => [`// ---- ${x.name} ----`, ...x.body]);
 }
 
-function views(el: El): ExpectedItem['views'] {
+function textViews(el: El): ExpectedItem['views'] {
   if (el.tag === 'Page') return el.parts.length ? ['code', 'changes', 'xml'] : ['code', 'xml'];
   if (el.tag === 'DAC' || el.tag === 'EditorUpdatedFields') return ['code', 'xml'];
   return cdatas(el).length ? ['code', 'xml'] : ['xml'];
+}
+
+/** Kinds whose summary view is listed first (Phase 5); every other item has it last ("Facts"). */
+export function summaryFirst(tag: string, attrs: [string, string][]): boolean {
+  const ft = attrs.find(([k]) => k === 'FileType')?.[1] ?? '';
+  if (tag === 'Graph') return ft === 'ExistingDac' || ft === 'NewDac';
+  if (tag === 'Sql') return attrs.some(([k]) => k === 'TableSchemaXml');
+  if (tag === 'Page') return true; // every fixture Page has a pageSource
+  return ['DAC', 'Table', 'GenericInquiryScreen', 'GIDesign', 'ScreenWithRights', 'SiteMapNode', 'MobileSiteMap'].includes(tag);
+}
+
+/** Views in order: a summary first or last, then the text views (status comes from the first text view). */
+export function withSummary(text: ExpectedItem['views'], first: boolean): ExpectedItem['views'] {
+  return first ? ['summary', ...text] : [...text, 'summary'];
+}
+
+function views(el: El): ExpectedItem['views'] {
+  return withSummary(textViews(el), summaryFirst(el.tag, el.attrs));
 }
 
 function status(a: El | null, b: El | null): ItemStatus {
@@ -379,12 +397,8 @@ function buildItems(rng: Rng): Item[] {
     const rows = [
       '<GIDesign>',
       `    <row DesignID="${id}" Name="${name}" FilterColCount="3" PageSize="0" ExportTop="0" NewRecordCreationEnabled="False">`,
-      '        <GITable>',
-      ...Array.from({ length: rng.int(2, 5) }, (_, k) => `            <row Alias="${rng.pick(DACS)}${k}" Name="PX.Objects.SO.${rng.pick(DACS)}" />`),
-      '        </GITable>',
-      '        <GIResult>',
-      ...Array.from({ length: rng.int(3, 9) }, (_, k) => `            <row LineNbr="${k + 1}" ObjectName="${rng.pick(DACS)}" Field="${rng.pick(WORDS).toLowerCase()}Nbr" IsVisible="True" />`),
-      '        </GIResult>',
+      ...Array.from({ length: rng.int(2, 5) }, (_, k) => `        <GITable LineNbr="${k + 1}" Alias="${rng.pick(DACS)}${k}" Name="PX.Objects.SO.${rng.pick(DACS)}" />`),
+      ...Array.from({ length: rng.int(3, 9) }, (_, k) => `        <GIResult LineNbr="${k + 1}" ObjectName="${rng.pick(DACS)}" Field="${rng.pick(WORDS).toLowerCase()}Nbr" IsVisible="True" />`),
       '    </row>',
       '</GIDesign>',
     ];
@@ -537,8 +551,8 @@ function buildPair(): ProjectPair {
   mod(pick(by('GenericInquiryScreen'), 0), (el) => {
     const p = el.parts[0];
     if (p?.kind === 'lines') {
-      const at = p.lines.findIndex((l) => l.includes('</GIResult>'));
-      p.lines.splice(at, 0, '                        <row LineNbr="99" ObjectName="SOOrder" Field="orderTotal" IsVisible="True" />');
+      const at = p.lines.findLastIndex((l) => l.includes('<GIResult '));
+      p.lines.splice(at + 1, 0, '                        <GIResult LineNbr="99" ObjectName="SOOrder" Field="orderTotal" IsVisible="True" />');
     }
   });
   mod(pick(by('EntityEndpoint'), 0), (el) => {

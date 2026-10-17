@@ -62,6 +62,9 @@ export const tid = (page: Page, id: string): Locator => page.getByTestId(id);
 export async function openApp(page: Page): Promise<void> {
   await page.goto('/');
   await page.waitForFunction(() => !!window.__sidediff);
+  // Phase 5: with both sides empty a start screen covers the editor; these tests work with text.
+  const dismiss = page.getByTestId('start-dismiss');
+  if (await dismiss.isVisible().catch(() => false)) await dismiss.click();
   await page.locator('.monaco-diff-editor').first().waitFor();
 }
 
@@ -84,12 +87,28 @@ export async function waitForDiff(page: Page, linesA: number, linesB: number, ti
   await expect(tid(page, 'progress')).toHaveAttribute('data-state', 'idle');
 }
 
+/**
+ * Phase 5: loading a <Customization> project opens the package overview over
+ * the editor. Tests that work with the full diff close it (Esc, as a user would).
+ */
+export async function closeOverview(page: Page): Promise<void> {
+  const ov = page.getByTestId('overview-view');
+  // The overview opens when the first index that includes the file lands.
+  await ov.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => undefined);
+  if (await ov.isVisible().catch(() => false)) {
+    await page.locator('body').click({ position: { x: 800, y: 5 } });
+    await page.keyboard.press('Escape');
+    await expect(ov).toBeHidden();
+  }
+}
+
 /** Loads a fixture pair and waits for its diff. */
 export async function loadPair(page: Page, name: string): Promise<ChangesJson> {
   const c = changes(name);
   await loadFile(page, 'a', c.a.file);
   await loadFile(page, 'b', c.b.file);
   await waitForDiff(page, c.a.lines, c.b.lines);
+  await closeOverview(page);
   return c;
 }
 

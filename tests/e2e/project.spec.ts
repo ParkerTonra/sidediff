@@ -2,7 +2,7 @@
 // whole-text undo"). Item 6 (indexing time / long tasks) is in `pnpm bench`.
 import type { Locator, Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { clickEditor, expect, fixturePath, loadFile, openApp, ROOT, statValue, test, textHash, tid, visibleLinesB, waitForDiff } from './helpers.ts';
+import { closeOverview, clickEditor, expect, fixturePath, loadFile, openApp, ROOT, statValue, test, textHash, tid, visibleLinesB, waitForDiff } from './helpers.ts';
 import { join } from 'node:path';
 
 interface Item {
@@ -25,7 +25,7 @@ interface ProjectSidecar {
 }
 const P = JSON.parse(readFileSync(join(ROOT, 'fixtures', 'project.changes.json'), 'utf8')) as ProjectSidecar;
 const GLYPH: Record<Item['status'], string> = { modified: '~', whitespace: '≈', 'only-a': '−', 'only-b': '+', same: '=' };
-const GROUPS = ['code', 'screens', 'tables', 'sql', 'reports', 'inquiries', 'sitemap', 'integration', 'files', 'other'];
+const GROUPS = ['code', 'screens', 'tables', 'sql', 'reports', 'inquiries', 'sitemap', 'integration', 'security', 'files', 'assemblies', 'images', 'other'];
 
 const find = (pred: (i: Item) => boolean, what: string): Item => {
   const it = P.items.find(pred);
@@ -53,16 +53,23 @@ async function loadProject(page: Page): Promise<void> {
   await loadFile(page, 'b', P.b.file);
   await waitForDiff(page, P.a.lines, P.b.lines);
   await expect(tid(page, 'explorer')).toBeVisible({ timeout: 10_000 });
+  await closeOverview(page);
   await tid(page, 'filter-all').click();
   await expect(page.getByTestId('explorer-item')).toHaveCount(P.counts.total, { timeout: 10_000 });
 }
 
-async function openItem(page: Page, it: Item): Promise<void> {
+async function openItem(page: Page, it: Item, codeView = true): Promise<void> {
   await row(page, it).scrollIntoViewIfNeeded();
   await row(page, it).click();
   await expect(tid(page, 'item-bar')).toBeVisible();
   await expect.poll(() => view(page)).toContain(it.id.split(':')[0]);
   await expect(tid(page, 'item-bar')).toContainText(it.name);
+  // Phase 5: items with a summary open on it; these tests look at the code/text view.
+  const code = tid(page, 'item-view-code');
+  if (codeView && (await code.isVisible().catch(() => false))) {
+    await code.click();
+    await expect.poll(() => view(page)).toMatch(/#code$/);
+  }
 }
 
 test.use({ viewport: { width: 1600, height: 1000 } });
@@ -127,7 +134,7 @@ test('1c. a Page opens on its decoded pageSource (ASPX), and Related links the s
   for (const id of others) await expect(related, id).toContainText(find((i) => i.id === id, id).name);
   // One click opens a related piece (the site map entry).
   const sm = find((i) => i.id === `SiteMapNode:${P.relatedScreen.screenId}`, 'related site map node');
-  await related.getByText(sm.name, { exact: true }).first().click();
+  await related.locator(`[data-id="${sm.id}"]`).first().click();
   await expect.poll(() => view(page)).toContain(sm.id);
 });
 

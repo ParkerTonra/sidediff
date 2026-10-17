@@ -8,7 +8,7 @@
 // passed in.
 
 import { createRng } from './rng.ts';
-import { generateProjectPair, GROUP_ORDER, RELATED_SCREEN } from './project-gen.ts';
+import { generateProjectPair, GROUP_ORDER, RELATED_SCREEN, withSummary } from './project-gen.ts';
 import type { ExpectedItem } from './project-gen.ts';
 import { png, writeZip } from './zip.ts';
 import type { ZipInput } from './zip.ts';
@@ -158,7 +158,16 @@ function zipInputs(side: Side, project: string, statics: PackageStatics): ZipInp
   return files;
 }
 
-const sameBytes = (x: Uint8Array | undefined, y: Uint8Array | undefined): boolean => !!x && !!y && Buffer.compare(Buffer.from(x), Buffer.from(y)) === 0;
+const sameBytes = (x: Uint8Array, y: Uint8Array): boolean => Buffer.compare(Buffer.from(x), Buffer.from(y)) === 0;
+
+/** Same bytes → same; text that differs only in leading/trailing whitespace per line → whitespace; else modified. */
+function fileStatus(kind: string, a: Uint8Array, b: Uint8Array): ItemStatus {
+  if (sameBytes(a, b)) return 'same';
+  if (kind !== 'code') return 'modified';
+  const la = Buffer.from(a).toString('utf8').split(/\r?\n/);
+  const lb = Buffer.from(b).toString('utf8').split(/\r?\n/);
+  return la.length === lb.length && la.every((l, i) => l.trim() === (lb[i] ?? '').trim()) ? 'whitespace' : 'modified';
+}
 
 export function generatePackagePair(statics: PackageStatics): PackagePair {
   const proj = generateProjectPair();
@@ -186,10 +195,14 @@ export function generatePackagePair(statics: PackageStatics): PackagePair {
     const ea = it.a ? za.get(path) : undefined;
     const eb = it.b ? zb.get(path) : undefined;
     if (!ea && !eb) return { ...it, sides: sidesOf(it) }; // reference only on both sides: compare the element
-    const views: ExpectedItem['views'] = [kindOf(path), 'xml'];
+    const kind = kindOf(path);
+    // .aspx/.html content gets a screen outline summary first; other files have Facts last.
+    const views = withSummary([kind, 'xml'], /\.(aspx|html?)$/.test(path));
     let status: ItemStatus = it.status;
-    if (it.a && it.b) status = ea && eb ? (sameBytes(ea.data, eb.data) ? 'same' : 'modified') : 'modified';
-    return { ...it, views, status, sides: sidesOf(it) };
+    if (it.a && it.b) status = ea && eb ? fileStatus(kind, ea.data, eb.data) : 'modified';
+    // A referenced DLL or image is grouped by kind, like an unreferenced one.
+    const group: ProjectGroup = kind === 'assembly' ? 'assemblies' : kind === 'image' ? 'images' : it.group;
+    return { ...it, group, views, status, sides: sidesOf(it) };
   });
 
   // Unreferenced zip entries become Zip:<path> items.
@@ -203,7 +216,8 @@ export function generatePackagePair(statics: PackageStatics): PackagePair {
       const prev = zipItems.get(id);
       if (prev) {
         prev.sides.push('b');
-        prev.status = sameBytes(za.get(e.path.toLowerCase())?.data, e.data) ? 'same' : 'modified';
+        const ea = za.get(e.path.toLowerCase());
+        prev.status = ea ? fileStatus(kind, ea.data, e.data) : 'modified';
         continue;
       }
       zipItems.set(id, {
@@ -215,7 +229,7 @@ export function generatePackagePair(statics: PackageStatics): PackagePair {
         detail: 'not in project.xml',
         screenId: null,
         status: side === 'a' ? 'only-a' : 'only-b',
-        views: [kind],
+        views: [kind, 'summary'], // no xml view: not in project.xml
         // No project.xml lines; `sides` says where the file is.
         a: null,
         b: null,
