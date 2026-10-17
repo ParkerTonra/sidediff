@@ -7,6 +7,7 @@ bench-results/
 fixtures/*.xml
 fixtures/*.cs
 fixtures/*.txt
+fixtures/*.zip
 *.log
 .claude/next-prompt.md*
 .claude/settings.local.json
