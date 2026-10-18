@@ -2,6 +2,7 @@
   "name": "sidediff",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@12.11.2",
   "scripts": {

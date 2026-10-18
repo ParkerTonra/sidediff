@@ -231,6 +231,10 @@ SideDiff bundles or ships these components, all under permissive licenses that r
 
 The full license and notice texts of all of these ship with the site as [`THIRD-PARTY-NOTICES.txt`](public/THIRD-PARTY-NOTICES.txt) (copied to `dist/THIRD-PARTY-NOTICES.txt` by the build), so a copied `dist/` folder carries them. Regenerate that file after upgrading any of these components (docs/DECISIONS.md D20).
 
+## License
+
+SideDiff is MIT licensed; see [LICENSE](LICENSE). Bundled third-party components keep their own licenses, listed above.
+
 ## Privacy
 
 No telemetry, no analytics, no upload. Files you load are read locally with the File API. Pane contents are never written to `localStorage`.
